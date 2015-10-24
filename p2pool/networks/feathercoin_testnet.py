@@ -1,7 +1,7 @@
 from p2pool.bitcoin import networks
 
 PARENT = networks.nets['feathercoin_testnet']
-SHARE_PERIOD = 15  # seconds
+SHARE_PERIOD = 30  # seconds
 CHAIN_LENGTH = 60*60//10  # shares
 REAL_CHAIN_LENGTH = 60*60//10  # shares
 TARGET_LOOKBEHIND = 200  # shares
@@ -16,4 +16,4 @@ WORKER_PORT = 19328
 BOOTSTRAP_ADDRS = ''.split(' ')
 ANNOUNCE_CHANNEL = '#p2pool-ftct'
 VERSION_CHECK = lambda v: True
-VERSION_WARNING = lambda v: 'Upgrade Feathercoin to >= 0.8.6.0!' if v < 80600 else None
+VERSION_WARNING = lambda v: 'Upgrade Feathercoin to >= 0.8.7.0!' if v < 80700 else None
