@@ -2,7 +2,7 @@
  * Copyright (c) 2009 Colin Percival, 2011 ArtForz
  * Copyright (c) 2012 Andrew Moon (floodyberry)
  * Copyright (c) 2012 Samuel Neves <sneves@dei.uc.pt>
- * Copyright (c) 2014 John Doering <ghostlander@phoenixcoin.org>
+ * Copyright (c) 2014-2018 John Doering <ghostlander@phoenixcoin.org>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,21 +33,6 @@
 #include <string.h>
 
 #include "neoscrypt.h"
-
-
-#if (WINDOWS)
-/* sizeof(unsigned long) = 4 for MinGW64 */
-typedef unsigned long long ulong;
-#else
-typedef unsigned long ulong;
-#endif
-typedef unsigned int  uint;
-typedef unsigned char uchar;
-typedef unsigned int  bool;
-
-
-#define MIN(a, b) ((a) < (b) ? a : b)
-#define MAX(a, b) ((a) > (b) ? a : b)
 
 
 /* NeoScrypt */
@@ -120,15 +105,14 @@ static void neoscrypt_chacha(uint *X, uint rounds) {
 #undef quarter
 }
 
-
 /* Fast 32-bit / 64-bit memcpy();
  * len must be a multiple of 32 bytes */
 static void neoscrypt_blkcpy(void *dstp, const void *srcp, uint len) {
-    ulong *dst = (ulong *) dstp;
-    ulong *src = (ulong *) srcp;
+    size_t *dst = (size_t *) dstp;
+    size_t *src = (size_t *) srcp;
     uint i;
 
-    for(i = 0; i < (len / sizeof(ulong)); i += 4) {
+    for(i = 0; i < (len / sizeof(size_t)); i += 4) {
         dst[i]     = src[i];
         dst[i + 1] = src[i + 1];
         dst[i + 2] = src[i + 2];
@@ -139,12 +123,12 @@ static void neoscrypt_blkcpy(void *dstp, const void *srcp, uint len) {
 /* Fast 32-bit / 64-bit block swapper;
  * len must be a multiple of 32 bytes */
 static void neoscrypt_blkswp(void *blkAp, void *blkBp, uint len) {
-    ulong *blkA = (ulong *) blkAp;
-    ulong *blkB = (ulong *) blkBp;
-    register ulong t0, t1, t2, t3;
+    size_t *blkA = (size_t *) blkAp;
+    size_t *blkB = (size_t *) blkBp;
+    register size_t t0, t1, t2, t3;
     uint i;
 
-    for(i = 0; i < (len / sizeof(ulong)); i += 4) {
+    for(i = 0; i < (len / sizeof(size_t)); i += 4) {
         t0          = blkA[i];
         t1          = blkA[i + 1];
         t2          = blkA[i + 2];
@@ -163,11 +147,11 @@ static void neoscrypt_blkswp(void *blkAp, void *blkBp, uint len) {
 /* Fast 32-bit / 64-bit block XOR engine;
  * len must be a multiple of 32 bytes */
 static void neoscrypt_blkxor(void *dstp, const void *srcp, uint len) {
-    ulong *dst = (ulong *) dstp;
-    ulong *src = (ulong *) srcp;
+    size_t *dst = (size_t *) dstp;
+    size_t *src = (size_t *) srcp;
     uint i;
 
-    for(i = 0; i < (len / sizeof(ulong)); i += 4) {
+    for(i = 0; i < (len / sizeof(size_t)); i += 4) {
         dst[i]     ^= src[i];
         dst[i + 1] ^= src[i + 1];
         dst[i + 2] ^= src[i + 2];
@@ -176,15 +160,15 @@ static void neoscrypt_blkxor(void *dstp, const void *srcp, uint len) {
 }
 
 /* 32-bit / 64-bit optimised memcpy() */
-static void neoscrypt_copy(void *dstp, const void *srcp, uint len) {
-    ulong *dst = (ulong *) dstp;
-    ulong *src = (ulong *) srcp;
+void neoscrypt_copy(void *dstp, const void *srcp, uint len) {
+    size_t *dst = (size_t *) dstp;
+    size_t *src = (size_t *) srcp;
     uint i, tail;
 
-    for(i = 0; i < (len / sizeof(ulong)); i++)
+    for(i = 0; i < (len / sizeof(size_t)); i++)
       dst[i] = src[i];
 
-    tail = len & (sizeof(ulong) - 1);
+    tail = len & (sizeof(size_t) - 1);
     if(tail) {
         uchar *dstb = (uchar *) dstp;
         uchar *srcb = (uchar *) srcp;
@@ -195,15 +179,15 @@ static void neoscrypt_copy(void *dstp, const void *srcp, uint len) {
 }
 
 /* 32-bit / 64-bit optimised memory erase aka memset() to zero */
-static void neoscrypt_erase(void *dstp, uint len) {
-    const ulong null = 0;
-    ulong *dst = (ulong *) dstp;
+void neoscrypt_erase(void *dstp, uint len) {
+    const size_t null = 0;
+    size_t *dst = (size_t *) dstp;
     uint i, tail;
 
-    for(i = 0; i < (len / sizeof(ulong)); i++)
+    for(i = 0; i < (len / sizeof(size_t)); i++)
       dst[i] = null;
 
-    tail = len & (sizeof(ulong) - 1);
+    tail = len & (sizeof(size_t) - 1);
     if(tail) {
         uchar *dstb = (uchar *) dstp;
 
@@ -212,53 +196,28 @@ static void neoscrypt_erase(void *dstp, uint len) {
     }
 }
 
-/* 32-bit / 64-bit optimised XOR engine */
-static void neoscrypt_xor(void *dstp, const void *srcp, uint len) {
-    ulong *dst = (ulong *) dstp;
-    ulong *src = (ulong *) srcp;
-    uint i, tail;
+/* Fail safe bytewise XOR engine */
+void neoscrypt_xor(void *dstp, const void *srcp, uint len) {
+    uchar *dst = (uchar *) dstp;
+    uchar *src = (uchar *) srcp;
+    uint i;
 
-    for(i = 0; i < (len / sizeof(ulong)); i++)
+    for(i = 0; i < len; i++)
       dst[i] ^= src[i];
-
-    tail = len & (sizeof(ulong) - 1);
-    if(tail) {
-        uchar *dstb = (uchar *) dstp;
-        uchar *srcb = (uchar *) srcp;
-
-        for(i = len - tail; i < len; i++)
-          dstb[i] ^= srcb[i];
-    }
 }
 
 
 /* BLAKE2s */
 
-#define BLAKE2S_BLOCK_SIZE    64U
-#define BLAKE2S_OUT_SIZE      32U
-#define BLAKE2S_KEY_SIZE      32U
-
-/* Parameter block of 32 bytes */
-typedef struct blake2s_param_t {
-    uchar digest_length;
-    uchar key_length;
-    uchar fanout;
-    uchar depth;
-    uint  leaf_length;
-    uchar node_offset[6];
-    uchar node_depth;
-    uchar inner_length;
-    uchar salt[8];
-    uchar personal[8];
-} blake2s_param;
-
-/* State block of 180 bytes */
+/* State block of 256 bytes */
 typedef struct blake2s_state_t {
     uint  h[8];
     uint  t[2];
     uint  f[2];
-    uchar buf[2 * BLAKE2S_BLOCK_SIZE];
+    uchar buf[2 * BLOCK_SIZE];
     uint  buflen;
+    uint  padding[3];
+    uchar tempbuf[BLOCK_SIZE];
 } blake2s_state;
 
 static const uint blake2s_IV[8] = {
@@ -266,233 +225,1497 @@ static const uint blake2s_IV[8] = {
     0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19
 };
 
-static const uint8_t blake2s_sigma[10][16] = {
-    {  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15 } ,
-    { 14, 10,  4,  8,  9, 15, 13,  6,  1, 12,  0,  2, 11,  7,  5,  3 } ,
-    { 11,  8, 12,  0,  5,  2, 15, 13, 10, 14,  3,  6,  7,  1,  9,  4 } ,
-    {  7,  9,  3,  1, 13, 12, 11, 14,  2,  6,  5, 10,  4,  0, 15,  8 } ,
-    {  9,  0,  5,  7,  2,  4, 10, 15, 14,  1, 11, 12,  6,  8,  3, 13 } ,
-    {  2, 12,  6, 10,  0, 11,  8,  3,  4, 13,  7,  5, 15, 14,  1,  9 } ,
-    { 12,  5,  1, 15, 14, 13,  4, 10,  0,  7,  6,  3,  9,  2,  8, 11 } ,
-    { 13, 11,  7, 14, 12,  1,  3,  9,  5,  0, 15,  4,  8,  6,  2, 10 } ,
-    {  6, 15, 14,  9, 11,  3,  0,  8, 12,  2, 13,  7,  1,  4, 10,  5 } ,
-    { 10,  2,  8,  4,  7,  6,  1,  5, 15, 11,  9, 14,  3, 12, 13 , 0 } ,
-};
+/* Buffer mixer (compressor) */
+static void blake2s_compress(blake2s_state *S) {
+    uint *v = (uint *) S->tempbuf;
+    uint *m = (uint *) S->buf;
+    register uint t0, t1, t2, t3;
 
-static void blake2s_compress(blake2s_state *S, const uint *buf) {
-    uint i;
-    uint m[16];
-    uint v[16];
-
-    neoscrypt_copy(m, buf, 64);
-    neoscrypt_copy(v, S, 32);
-
-    v[ 8] = blake2s_IV[0];
-    v[ 9] = blake2s_IV[1];
+    v[0]  = S->h[0];
+    v[1]  = S->h[1];
+    v[2]  = S->h[2];
+    v[3]  = S->h[3];
+    v[4]  = S->h[4];
+    v[5]  = S->h[5];
+    v[6]  = S->h[6];
+    v[7]  = S->h[7];
+    v[8]  = blake2s_IV[0];
+    v[9]  = blake2s_IV[1];
     v[10] = blake2s_IV[2];
     v[11] = blake2s_IV[3];
     v[12] = S->t[0] ^ blake2s_IV[4];
     v[13] = S->t[1] ^ blake2s_IV[5];
     v[14] = S->f[0] ^ blake2s_IV[6];
     v[15] = S->f[1] ^ blake2s_IV[7];
-#define G(r,i,a,b,c,d) \
-  do { \
-    a = a + b + m[blake2s_sigma[r][2*i+0]]; \
-    d = ROTR32(d ^ a, 16); \
-    c = c + d; \
-    b = ROTR32(b ^ c, 12); \
-    a = a + b + m[blake2s_sigma[r][2*i+1]]; \
-    d = ROTR32(d ^ a, 8); \
-    c = c + d; \
-    b = ROTR32(b ^ c, 7); \
-  } while(0)
-#define ROUND(r) \
-  do { \
-    G(r, 0, v[ 0], v[ 4], v[ 8], v[12]); \
-    G(r, 1, v[ 1], v[ 5], v[ 9], v[13]); \
-    G(r, 2, v[ 2], v[ 6], v[10], v[14]); \
-    G(r, 3, v[ 3], v[ 7], v[11], v[15]); \
-    G(r, 4, v[ 0], v[ 5], v[10], v[15]); \
-    G(r, 5, v[ 1], v[ 6], v[11], v[12]); \
-    G(r, 6, v[ 2], v[ 7], v[ 8], v[13]); \
-    G(r, 7, v[ 3], v[ 4], v[ 9], v[14]); \
-  } while(0)
-    ROUND(0);
-    ROUND(1);
-    ROUND(2);
-    ROUND(3);
-    ROUND(4);
-    ROUND(5);
-    ROUND(6);
-    ROUND(7);
-    ROUND(8);
-    ROUND(9);
 
-  for(i = 0; i < 8; i++)
-    S->h[i] = S->h[i] ^ v[i] ^ v[i + 8];
+/* Round 0 */
+    t0 = v[0];
+    t1 = v[4];
+    t0 = t0 + t1 + m[0];
+    t3 = v[12];
+    t2 = v[8];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[1];
+    v[0] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[12] = t3;
+    t2 = t2 + t3;
+    v[8] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[4] = t1;
 
-#undef G
-#undef ROUND
+    t0 = v[1];
+    t1 = v[5];
+    t0 = t0 + t1 + m[2];
+    t3 = v[13];
+    t2 = v[9];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[3];
+    v[1] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[13] = t3;
+    t2 = t2 + t3;
+    v[9] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[5] = t1;
+
+    t0 = v[2];
+    t1 = v[6];
+    t0 = t0 + t1 + m[4];
+    t3 = v[14];
+    t2 = v[10];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[5];
+    v[2] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[14] = t3;
+    t2 = t2 + t3;
+    v[10] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[6] = t1;
+
+    t0 = v[3];
+    t1 = v[7];
+    t0 = t0 + t1 + m[6];
+    t3 = v[15];
+    t2 = v[11];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[7];
+    v[3] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[15] = t3;
+    t2 = t2 + t3;
+    v[11] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[7] = t1;
+
+    t0 = v[0];
+    t1 = v[5];
+    t0 = t0 + t1 + m[8];
+    t3 = v[15];
+    t2 = v[10];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[9];
+    v[0] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[15] = t3;
+    t2 = t2 + t3;
+    v[10] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[5] = t1;
+
+    t0 = v[1];
+    t1 = v[6];
+    t0 = t0 + t1 + m[10];
+    t3 = v[12];
+    t2 = v[11];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[11];
+    v[1] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[12] = t3;
+    t2 = t2 + t3;
+    v[11] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[6] = t1;
+
+    t0 = v[2];
+    t1 = v[7];
+    t0 = t0 + t1 + m[12];
+    t3 = v[13];
+    t2 = v[8];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[13];
+    v[2] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[13] = t3;
+    t2 = t2 + t3;
+    v[8] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[7] = t1;
+
+    t0 = v[3];
+    t1 = v[4];
+    t0 = t0 + t1 + m[14];
+    t3 = v[14];
+    t2 = v[9];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[15];
+    v[3] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[14] = t3;
+    t2 = t2 + t3;
+    v[9] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[4] = t1;
+
+/* Round 1 */
+    t0 = v[0];
+    t1 = v[4];
+    t0 = t0 + t1 + m[14];
+    t3 = v[12];
+    t2 = v[8];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[10];
+    v[0] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[12] = t3;
+    t2 = t2 + t3;
+    v[8] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[4] = t1;
+
+    t0 = v[1];
+    t1 = v[5];
+    t0 = t0 + t1 + m[4];
+    t3 = v[13];
+    t2 = v[9];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[8];
+    v[1] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[13] = t3;
+    t2 = t2 + t3;
+    v[9] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[5] = t1;
+
+    t0 = v[2];
+    t1 = v[6];
+    t0 = t0 + t1 + m[9];
+    t3 = v[14];
+    t2 = v[10];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[15];
+    v[2] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[14] = t3;
+    t2 = t2 + t3;
+    v[10] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[6] = t1;
+
+    t0 = v[3];
+    t1 = v[7];
+    t0 = t0 + t1 + m[13];
+    t3 = v[15];
+    t2 = v[11];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[6];
+    v[3] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[15] = t3;
+    t2 = t2 + t3;
+    v[11] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[7] = t1;
+
+    t0 = v[0];
+    t1 = v[5];
+    t0 = t0 + t1 + m[1];
+    t3 = v[15];
+    t2 = v[10];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[12];
+    v[0] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[15] = t3;
+    t2 = t2 + t3;
+    v[10] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[5] = t1;
+
+    t0 = v[1];
+    t1 = v[6];
+    t0 = t0 + t1 + m[0];
+    t3 = v[12];
+    t2 = v[11];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[2];
+    v[1] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[12] = t3;
+    t2 = t2 + t3;
+    v[11] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[6] = t1;
+
+    t0 = v[2];
+    t1 = v[7];
+    t0 = t0 + t1 + m[11];
+    t3 = v[13];
+    t2 = v[8];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[7];
+    v[2] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[13] = t3;
+    t2 = t2 + t3;
+    v[8] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[7] = t1;
+
+    t0 = v[3];
+    t1 = v[4];
+    t0 = t0 + t1 + m[5];
+    t3 = v[14];
+    t2 = v[9];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[3];
+    v[3] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[14] = t3;
+    t2 = t2 + t3;
+    v[9] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[4] = t1;
+
+/* Round 2 */
+    t0 = v[0];
+    t1 = v[4];
+    t0 = t0 + t1 + m[11];
+    t3 = v[12];
+    t2 = v[8];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[8];
+    v[0] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[12] = t3;
+    t2 = t2 + t3;
+    v[8] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[4] = t1;
+
+    t0 = v[1];
+    t1 = v[5];
+    t0 = t0 + t1 + m[12];
+    t3 = v[13];
+    t2 = v[9];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[0];
+    v[1] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[13] = t3;
+    t2 = t2 + t3;
+    v[9] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[5] = t1;
+
+    t0 = v[2];
+    t1 = v[6];
+    t0 = t0 + t1 + m[5];
+    t3 = v[14];
+    t2 = v[10];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[2];
+    v[2] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[14] = t3;
+    t2 = t2 + t3;
+    v[10] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[6] = t1;
+
+    t0 = v[3];
+    t1 = v[7];
+    t0 = t0 + t1 + m[15];
+    t3 = v[15];
+    t2 = v[11];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[13];
+    v[3] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[15] = t3;
+    t2 = t2 + t3;
+    v[11] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[7] = t1;
+
+    t0 = v[0];
+    t1 = v[5];
+    t0 = t0 + t1 + m[10];
+    t3 = v[15];
+    t2 = v[10];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[14];
+    v[0] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[15] = t3;
+    t2 = t2 + t3;
+    v[10] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[5] = t1;
+
+    t0 = v[1];
+    t1 = v[6];
+    t0 = t0 + t1 + m[3];
+    t3 = v[12];
+    t2 = v[11];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[6];
+    v[1] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[12] = t3;
+    t2 = t2 + t3;
+    v[11] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[6] = t1;
+
+    t0 = v[2];
+    t1 = v[7];
+    t0 = t0 + t1 + m[7];
+    t3 = v[13];
+    t2 = v[8];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[1];
+    v[2] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[13] = t3;
+    t2 = t2 + t3;
+    v[8] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[7] = t1;
+
+    t0 = v[3];
+    t1 = v[4];
+    t0 = t0 + t1 + m[9];
+    t3 = v[14];
+    t2 = v[9];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[4];
+    v[3] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[14] = t3;
+    t2 = t2 + t3;
+    v[9] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[4] = t1;
+
+/* Round 3 */
+    t0 = v[0];
+    t1 = v[4];
+    t0 = t0 + t1 + m[7];
+    t3 = v[12];
+    t2 = v[8];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[9];
+    v[0] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[12] = t3;
+    t2 = t2 + t3;
+    v[8] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[4] = t1;
+
+    t0 = v[1];
+    t1 = v[5];
+    t0 = t0 + t1 + m[3];
+    t3 = v[13];
+    t2 = v[9];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[1];
+    v[1] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[13] = t3;
+    t2 = t2 + t3;
+    v[9] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[5] = t1;
+
+    t0 = v[2];
+    t1 = v[6];
+    t0 = t0 + t1 + m[13];
+    t3 = v[14];
+    t2 = v[10];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[12];
+    v[2] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[14] = t3;
+    t2 = t2 + t3;
+    v[10] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[6] = t1;
+
+    t0 = v[3];
+    t1 = v[7];
+    t0 = t0 + t1 + m[11];
+    t3 = v[15];
+    t2 = v[11];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[14];
+    v[3] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[15] = t3;
+    t2 = t2 + t3;
+    v[11] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[7] = t1;
+
+    t0 = v[0];
+    t1 = v[5];
+    t0 = t0 + t1 + m[2];
+    t3 = v[15];
+    t2 = v[10];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[6];
+    v[0] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[15] = t3;
+    t2 = t2 + t3;
+    v[10] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[5] = t1;
+
+    t0 = v[1];
+    t1 = v[6];
+    t0 = t0 + t1 + m[5];
+    t3 = v[12];
+    t2 = v[11];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[10];
+    v[1] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[12] = t3;
+    t2 = t2 + t3;
+    v[11] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[6] = t1;
+
+    t0 = v[2];
+    t1 = v[7];
+    t0 = t0 + t1 + m[4];
+    t3 = v[13];
+    t2 = v[8];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[0];
+    v[2] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[13] = t3;
+    t2 = t2 + t3;
+    v[8] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[7] = t1;
+
+    t0 = v[3];
+    t1 = v[4];
+    t0 = t0 + t1 + m[15];
+    t3 = v[14];
+    t2 = v[9];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[8];
+    v[3] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[14] = t3;
+    t2 = t2 + t3;
+    v[9] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[4] = t1;
+
+/* Round 4 */
+    t0 = v[0];
+    t1 = v[4];
+    t0 = t0 + t1 + m[9];
+    t3 = v[12];
+    t2 = v[8];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[0];
+    v[0] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[12] = t3;
+    t2 = t2 + t3;
+    v[8] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[4] = t1;
+
+    t0 = v[1];
+    t1 = v[5];
+    t0 = t0 + t1 + m[5];
+    t3 = v[13];
+    t2 = v[9];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[7];
+    v[1] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[13] = t3;
+    t2 = t2 + t3;
+    v[9] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[5] = t1;
+
+    t0 = v[2];
+    t1 = v[6];
+    t0 = t0 + t1 + m[2];
+    t3 = v[14];
+    t2 = v[10];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[4];
+    v[2] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[14] = t3;
+    t2 = t2 + t3;
+    v[10] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[6] = t1;
+
+    t0 = v[3];
+    t1 = v[7];
+    t0 = t0 + t1 + m[10];
+    t3 = v[15];
+    t2 = v[11];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[15];
+    v[3] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[15] = t3;
+    t2 = t2 + t3;
+    v[11] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[7] = t1;
+
+    t0 = v[0];
+    t1 = v[5];
+    t0 = t0 + t1 + m[14];
+    t3 = v[15];
+    t2 = v[10];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[1];
+    v[0] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[15] = t3;
+    t2 = t2 + t3;
+    v[10] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[5] = t1;
+
+    t0 = v[1];
+    t1 = v[6];
+    t0 = t0 + t1 + m[11];
+    t3 = v[12];
+    t2 = v[11];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[12];
+    v[1] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[12] = t3;
+    t2 = t2 + t3;
+    v[11] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[6] = t1;
+
+    t0 = v[2];
+    t1 = v[7];
+    t0 = t0 + t1 + m[6];
+    t3 = v[13];
+    t2 = v[8];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[8];
+    v[2] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[13] = t3;
+    t2 = t2 + t3;
+    v[8] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[7] = t1;
+
+    t0 = v[3];
+    t1 = v[4];
+    t0 = t0 + t1 + m[3];
+    t3 = v[14];
+    t2 = v[9];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[13];
+    v[3] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[14] = t3;
+    t2 = t2 + t3;
+    v[9] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[4] = t1;
+
+/* Round 5 */
+    t0 = v[0];
+    t1 = v[4];
+    t0 = t0 + t1 + m[2];
+    t3 = v[12];
+    t2 = v[8];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[12];
+    v[0] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[12] = t3;
+    t2 = t2 + t3;
+    v[8] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[4] = t1;
+
+    t0 = v[1];
+    t1 = v[5];
+    t0 = t0 + t1 + m[6];
+    t3 = v[13];
+    t2 = v[9];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[10];
+    v[1] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[13] = t3;
+    t2 = t2 + t3;
+    v[9] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[5] = t1;
+
+    t0 = v[2];
+    t1 = v[6];
+    t0 = t0 + t1 + m[0];
+    t3 = v[14];
+    t2 = v[10];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[11];
+    v[2] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[14] = t3;
+    t2 = t2 + t3;
+    v[10] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[6] = t1;
+
+    t0 = v[3];
+    t1 = v[7];
+    t0 = t0 + t1 + m[8];
+    t3 = v[15];
+    t2 = v[11];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[3];
+    v[3] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[15] = t3;
+    t2 = t2 + t3;
+    v[11] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[7] = t1;
+
+    t0 = v[0];
+    t1 = v[5];
+    t0 = t0 + t1 + m[4];
+    t3 = v[15];
+    t2 = v[10];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[13];
+    v[0] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[15] = t3;
+    t2 = t2 + t3;
+    v[10] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[5] = t1;
+
+    t0 = v[1];
+    t1 = v[6];
+    t0 = t0 + t1 + m[7];
+    t3 = v[12];
+    t2 = v[11];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[5];
+    v[1] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[12] = t3;
+    t2 = t2 + t3;
+    v[11] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[6] = t1;
+
+    t0 = v[2];
+    t1 = v[7];
+    t0 = t0 + t1 + m[15];
+    t3 = v[13];
+    t2 = v[8];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[14];
+    v[2] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[13] = t3;
+    t2 = t2 + t3;
+    v[8] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[7] = t1;
+
+    t0 = v[3];
+    t1 = v[4];
+    t0 = t0 + t1 + m[1];
+    t3 = v[14];
+    t2 = v[9];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[9];
+    v[3] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[14] = t3;
+    t2 = t2 + t3;
+    v[9] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[4] = t1;
+
+/* Round 6 */
+    t0 = v[0];
+    t1 = v[4];
+    t0 = t0 + t1 + m[12];
+    t3 = v[12];
+    t2 = v[8];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[5];
+    v[0] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[12] = t3;
+    t2 = t2 + t3;
+    v[8] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[4] = t1;
+
+    t0 = v[1];
+    t1 = v[5];
+    t0 = t0 + t1 + m[1];
+    t3 = v[13];
+    t2 = v[9];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[15];
+    v[1] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[13] = t3;
+    t2 = t2 + t3;
+    v[9] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[5] = t1;
+
+    t0 = v[2];
+    t1 = v[6];
+    t0 = t0 + t1 + m[14];
+    t3 = v[14];
+    t2 = v[10];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[13];
+    v[2] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[14] = t3;
+    t2 = t2 + t3;
+    v[10] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[6] = t1;
+
+    t0 = v[3];
+    t1 = v[7];
+    t0 = t0 + t1 + m[4];
+    t3 = v[15];
+    t2 = v[11];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[10];
+    v[3] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[15] = t3;
+    t2 = t2 + t3;
+    v[11] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[7] = t1;
+
+    t0 = v[0];
+    t1 = v[5];
+    t0 = t0 + t1 + m[0];
+    t3 = v[15];
+    t2 = v[10];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[7];
+    v[0] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[15] = t3;
+    t2 = t2 + t3;
+    v[10] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[5] = t1;
+
+    t0 = v[1];
+    t1 = v[6];
+    t0 = t0 + t1 + m[6];
+    t3 = v[12];
+    t2 = v[11];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[3];
+    v[1] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[12] = t3;
+    t2 = t2 + t3;
+    v[11] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[6] = t1;
+
+    t0 = v[2];
+    t1 = v[7];
+    t0 = t0 + t1 + m[9];
+    t3 = v[13];
+    t2 = v[8];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[2];
+    v[2] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[13] = t3;
+    t2 = t2 + t3;
+    v[8] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[7] = t1;
+
+    t0 = v[3];
+    t1 = v[4];
+    t0 = t0 + t1 + m[8];
+    t3 = v[14];
+    t2 = v[9];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[11];
+    v[3] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[14] = t3;
+    t2 = t2 + t3;
+    v[9] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[4] = t1;
+
+/* Round 7 */
+    t0 = v[0];
+    t1 = v[4];
+    t0 = t0 + t1 + m[13];
+    t3 = v[12];
+    t2 = v[8];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[11];
+    v[0] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[12] = t3;
+    t2 = t2 + t3;
+    v[8] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[4] = t1;
+
+    t0 = v[1];
+    t1 = v[5];
+    t0 = t0 + t1 + m[7];
+    t3 = v[13];
+    t2 = v[9];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[14];
+    v[1] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[13] = t3;
+    t2 = t2 + t3;
+    v[9] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[5] = t1;
+
+    t0 = v[2];
+    t1 = v[6];
+    t0 = t0 + t1 + m[12];
+    t3 = v[14];
+    t2 = v[10];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[1];
+    v[2] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[14] = t3;
+    t2 = t2 + t3;
+    v[10] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[6] = t1;
+
+    t0 = v[3];
+    t1 = v[7];
+    t0 = t0 + t1 + m[3];
+    t3 = v[15];
+    t2 = v[11];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[9];
+    v[3] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[15] = t3;
+    t2 = t2 + t3;
+    v[11] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[7] = t1;
+
+    t0 = v[0];
+    t1 = v[5];
+    t0 = t0 + t1 + m[5];
+    t3 = v[15];
+    t2 = v[10];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[0];
+    v[0] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[15] = t3;
+    t2 = t2 + t3;
+    v[10] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[5] = t1;
+
+    t0 = v[1];
+    t1 = v[6];
+    t0 = t0 + t1 + m[15];
+    t3 = v[12];
+    t2 = v[11];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[4];
+    v[1] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[12] = t3;
+    t2 = t2 + t3;
+    v[11] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[6] = t1;
+
+    t0 = v[2];
+    t1 = v[7];
+    t0 = t0 + t1 + m[8];
+    t3 = v[13];
+    t2 = v[8];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[6];
+    v[2] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[13] = t3;
+    t2 = t2 + t3;
+    v[8] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[7] = t1;
+
+    t0 = v[3];
+    t1 = v[4];
+    t0 = t0 + t1 + m[2];
+    t3 = v[14];
+    t2 = v[9];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[10];
+    v[3] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[14] = t3;
+    t2 = t2 + t3;
+    v[9] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[4] = t1;
+
+/* Round 8 */
+    t0 = v[0];
+    t1 = v[4];
+    t0 = t0 + t1 + m[6];
+    t3 = v[12];
+    t2 = v[8];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[15];
+    v[0] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[12] = t3;
+    t2 = t2 + t3;
+    v[8] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[4] = t1;
+
+    t0 = v[1];
+    t1 = v[5];
+    t0 = t0 + t1 + m[14];
+    t3 = v[13];
+    t2 = v[9];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[9];
+    v[1] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[13] = t3;
+    t2 = t2 + t3;
+    v[9] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[5] = t1;
+
+    t0 = v[2];
+    t1 = v[6];
+    t0 = t0 + t1 + m[11];
+    t3 = v[14];
+    t2 = v[10];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[3];
+    v[2] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[14] = t3;
+    t2 = t2 + t3;
+    v[10] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[6] = t1;
+
+    t0 = v[3];
+    t1 = v[7];
+    t0 = t0 + t1 + m[0];
+    t3 = v[15];
+    t2 = v[11];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[8];
+    v[3] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[15] = t3;
+    t2 = t2 + t3;
+    v[11] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[7] = t1;
+
+    t0 = v[0];
+    t1 = v[5];
+    t0 = t0 + t1 + m[12];
+    t3 = v[15];
+    t2 = v[10];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[2];
+    v[0] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[15] = t3;
+    t2 = t2 + t3;
+    v[10] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[5] = t1;
+
+    t0 = v[1];
+    t1 = v[6];
+    t0 = t0 + t1 + m[13];
+    t3 = v[12];
+    t2 = v[11];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[7];
+    v[1] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[12] = t3;
+    t2 = t2 + t3;
+    v[11] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[6] = t1;
+
+    t0 = v[2];
+    t1 = v[7];
+    t0 = t0 + t1 + m[1];
+    t3 = v[13];
+    t2 = v[8];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[4];
+    v[2] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[13] = t3;
+    t2 = t2 + t3;
+    v[8] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[7] = t1;
+
+    t0 = v[3];
+    t1 = v[4];
+    t0 = t0 + t1 + m[10];
+    t3 = v[14];
+    t2 = v[9];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[5];
+    v[3] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[14] = t3;
+    t2 = t2 + t3;
+    v[9] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[4] = t1;
+
+/* Round 9 */
+    t0 = v[0];
+    t1 = v[4];
+    t0 = t0 + t1 + m[10];
+    t3 = v[12];
+    t2 = v[8];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[2];
+    v[0] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[12] = t3;
+    t2 = t2 + t3;
+    v[8] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[4] = t1;
+
+    t0 = v[1];
+    t1 = v[5];
+    t0 = t0 + t1 + m[8];
+    t3 = v[13];
+    t2 = v[9];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[4];
+    v[1] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[13] = t3;
+    t2 = t2 + t3;
+    v[9] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[5] = t1;
+
+    t0 = v[2];
+    t1 = v[6];
+    t0 = t0 + t1 + m[7];
+    t3 = v[14];
+    t2 = v[10];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[6];
+    v[2] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[14] = t3;
+    t2 = t2 + t3;
+    v[10] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[6] = t1;
+
+    t0 = v[3];
+    t1 = v[7];
+    t0 = t0 + t1 + m[1];
+    t3 = v[15];
+    t2 = v[11];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[5];
+    v[3] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[15] = t3;
+    t2 = t2 + t3;
+    v[11] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[7] = t1;
+
+    t0 = v[0];
+    t1 = v[5];
+    t0 = t0 + t1 + m[15];
+    t3 = v[15];
+    t2 = v[10];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[11];
+    v[0] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[15] = t3;
+    t2 = t2 + t3;
+    v[10] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[5] = t1;
+
+    t0 = v[1];
+    t1 = v[6];
+    t0 = t0 + t1 + m[9];
+    t3 = v[12];
+    t2 = v[11];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[14];
+    v[1] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[12] = t3;
+    t2 = t2 + t3;
+    v[11] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[6] = t1;
+
+    t0 = v[2];
+    t1 = v[7];
+    t0 = t0 + t1 + m[3];
+    t3 = v[13];
+    t2 = v[8];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[12];
+    v[2] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[13] = t3;
+    t2 = t2 + t3;
+    v[8] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[7] = t1;
+
+    t0 = v[3];
+    t1 = v[4];
+    t0 = t0 + t1 + m[13];
+    t3 = v[14];
+    t2 = v[9];
+    t3 = ROTR32(t3 ^ t0, 16);
+    t2 = t2 + t3;
+    t1 = ROTR32(t1 ^ t2, 12);
+    t0 = t0 + t1 + m[0];
+    v[3] = t0;
+    t3 = ROTR32(t3 ^ t0, 8);
+    v[14] = t3;
+    t2 = t2 + t3;
+    v[9] = t2;
+    t1 = ROTR32(t1 ^ t2, 7);
+    v[4] = t1;
+
+    S->h[0] ^= v[0] ^ v[8];
+    S->h[1] ^= v[1] ^ v[9];
+    S->h[2] ^= v[2] ^ v[10];
+    S->h[3] ^= v[3] ^ v[11];
+    S->h[4] ^= v[4] ^ v[12];
+    S->h[5] ^= v[5] ^ v[13];
+    S->h[6] ^= v[6] ^ v[14];
+    S->h[7] ^= v[7] ^ v[15];
 }
 
-static void blake2s_update(blake2s_state *S, const uchar *input, uint input_size) {
-    uint left, fill;
+/* Initialisation vector with a parameter block XOR'ed in */
+static const uint blake2s_IV_P_XOR[8] = {
+    0x6B08C647, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A,
+    0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19
+};
 
-    while(input_size > 0) {
-        left = S->buflen;
-        fill = 2 * BLAKE2S_BLOCK_SIZE - left;
-        if(input_size > fill) {
-            /* Buffer fill */
-            neoscrypt_copy(S->buf + left, input, fill);
-            S->buflen += fill;
-            /* Counter increment */
-            S->t[0] += BLAKE2S_BLOCK_SIZE;
-            /* Compress */
-            blake2s_compress(S, (uint *) S->buf);
-            /* Shift buffer left */
-            neoscrypt_copy(S->buf, S->buf + BLAKE2S_BLOCK_SIZE, BLAKE2S_BLOCK_SIZE);
-            S->buflen -= BLAKE2S_BLOCK_SIZE;
-            input += fill;
-            input_size -= fill;
-        } else {
-            neoscrypt_copy(S->buf + left, input, input_size);
-            S->buflen += input_size; 
-            /* Do not compress */
-            input += input_size;
-            input_size = 0;
-        }
-    }
-}
-
-static void neoscrypt_blake2s(const void *input, const uint input_size, const void *key, const uchar key_size,
-  void *output, const uchar output_size) {
-    uchar block[BLAKE2S_BLOCK_SIZE];
-    blake2s_param P[1];
-    blake2s_state S[1];
-
-    /* Initialise */
-    neoscrypt_erase(P, 32);
-    P->digest_length = output_size;
-    P->key_length    = key_size;
-    P->fanout        = 1;
-    P->depth         = 1;
-
-    neoscrypt_erase(S, 180);
-    neoscrypt_copy(S, blake2s_IV, 32);
-    neoscrypt_xor(S, P, 32);
-
-    neoscrypt_erase(block, BLAKE2S_BLOCK_SIZE);
-    neoscrypt_copy(block, key, key_size);
-    blake2s_update(S, (uchar *) block, BLAKE2S_BLOCK_SIZE);
-
-    /* Update */
-    blake2s_update(S, (uchar *) input, input_size);
-
-    /* Finish */
-    if(S->buflen > BLAKE2S_BLOCK_SIZE) {
-        S->t[0] += BLAKE2S_BLOCK_SIZE;
-        blake2s_compress(S, (uint *) S->buf);
-        S->buflen -= BLAKE2S_BLOCK_SIZE;
-        neoscrypt_copy(S->buf, S->buf + BLAKE2S_BLOCK_SIZE, S->buflen);
-    }
-    S->t[0] += S->buflen;
-    S->f[0] = ~0U;
-    neoscrypt_erase(S->buf + S->buflen, 2 * BLAKE2S_BLOCK_SIZE - S->buflen);
-    blake2s_compress(S, (uint *) S->buf);
-
-    /* Write back */
-    neoscrypt_copy(output, S, output_size);
-}
-
-
-#define FASTKDF_BUFFER_SIZE 256U
-
-/* FastKDF, a fast buffered key derivation function:
- * FASTKDF_BUFFER_SIZE must be a power of 2;
- * password_len, salt_len and output_len should not exceed FASTKDF_BUFFER_SIZE;
- * prf_output_size must be <= prf_key_size; */
-static void neoscrypt_fastkdf(const uchar *password, uint password_len, const uchar *salt, uint salt_len,
-  uint N, uchar *output, uint output_len) {
-    const uint stack_align = 0x40, kdf_buf_size = FASTKDF_BUFFER_SIZE,
-      prf_input_size = BLAKE2S_BLOCK_SIZE, prf_key_size = BLAKE2S_KEY_SIZE, prf_output_size = BLAKE2S_OUT_SIZE;
-    uint bufptr, a, b, i, j;
-    uchar *A, *B, *prf_input, *prf_key, *prf_output;
+/* Performance optimised FastKDF with BLAKE2s integrated */
+void neoscrypt_fastkdf_opt(const uchar *password, const uchar *salt,
+  uchar *output, uint mode) {
+    const size_t stack_align = 0x40;
+    uint bufptr, output_len, i, j;
+    uchar *A, *B;
+    uint *S;
 
     /* Align and set up the buffers in stack */
-    uchar stack[2 * kdf_buf_size + prf_input_size + prf_key_size + prf_output_size + stack_align];
-    A          = &stack[stack_align & ~(stack_align - 1)];
-    B          = &A[kdf_buf_size + prf_input_size];
-    prf_output = &A[2 * kdf_buf_size + prf_input_size + prf_key_size];
+    uchar stack[864 + stack_align];
+    A = (uchar *) (((size_t)stack & ~(stack_align - 1)) + stack_align);
+    B = &A[320];
+    S = (uint *) &A[608];
 
-    /* Initialise the password buffer */
-    if(password_len > kdf_buf_size)
-       password_len = kdf_buf_size;
+    neoscrypt_copy(&A[0],   &password[0], 80);
+    neoscrypt_copy(&A[80],  &password[0], 80);
+    neoscrypt_copy(&A[160], &password[0], 80);
+    neoscrypt_copy(&A[240], &password[0], 16);
+    neoscrypt_copy(&A[256], &password[0], 64);
 
-    a = kdf_buf_size / password_len;
-    for(i = 0; i < a; i++)
-      neoscrypt_copy(&A[i * password_len], &password[0], password_len);
-    b = kdf_buf_size - a * password_len;
-    if(b)
-      neoscrypt_copy(&A[a * password_len], &password[0], b);
-    neoscrypt_copy(&A[kdf_buf_size], &password[0], prf_input_size);
+    if(!mode) {
+        output_len = 256;
+        neoscrypt_copy(&B[0],   &salt[0], 80);
+        neoscrypt_copy(&B[80],  &salt[0], 80);
+        neoscrypt_copy(&B[160], &salt[0], 80);
+        neoscrypt_copy(&B[240], &salt[0], 16);
+        neoscrypt_copy(&B[256], &salt[0], 32);
+    } else {
+        output_len = 32;
+        neoscrypt_copy(&B[0],   &salt[0], 256);
+        neoscrypt_copy(&B[256], &salt[0], 32);
+    }
 
-    /* Initialise the salt buffer */
-    if(salt_len > kdf_buf_size)
-       salt_len = kdf_buf_size;
+    for(i = 0, bufptr = 0; i < 32; i++) {
 
-    a = kdf_buf_size / salt_len;
-    for(i = 0; i < a; i++)
-      neoscrypt_copy(&B[i * salt_len], &salt[0], salt_len);
-    b = kdf_buf_size - a * salt_len;
-    if(b)
-      neoscrypt_copy(&B[a * salt_len], &salt[0], b);
-    neoscrypt_copy(&B[kdf_buf_size], &salt[0], prf_key_size);
+        /* BLAKE2s: initialise */
+        neoscrypt_copy(&S[0], blake2s_IV_P_XOR, 32);
+        neoscrypt_erase(&S[8], 16);
 
-    /* The primary iteration */
-    for(i = 0, bufptr = 0; i < N; i++) {
+        /* BLAKE2s: update key */
+        neoscrypt_copy(&S[12], &B[bufptr], 32);
+        neoscrypt_erase(&S[20], 32);
 
-        /* Map the PRF input buffer */
-        prf_input = &A[bufptr];
+        /* BLAKE2s: compress IV using key */
+        S[8] = 64;
+        blake2s_compress((blake2s_state *) S);
 
-        /* Map the PRF key buffer */
-        prf_key = &B[bufptr];
+        /* BLAKE2s: update input */
+        neoscrypt_copy(&S[12], &A[bufptr], 64);
 
-        /* PRF */
-        neoscrypt_blake2s(prf_input, prf_input_size, prf_key, prf_key_size, prf_output, prf_output_size);
+        /* BLAKE2s: compress again using input */
+        S[8] = 128;
+        S[10] = ~0U;
+        blake2s_compress((blake2s_state *) S);
 
-        /* Calculate the next buffer pointer */
-        for(j = 0, bufptr = 0; j < prf_output_size; j++)
-          bufptr += prf_output[j];
-        bufptr &= (kdf_buf_size - 1);
+        for(j = 0, bufptr = 0; j < 8; j++) {
+          bufptr += S[j];
+          bufptr += (S[j] >> 8);
+          bufptr += (S[j] >> 16);
+          bufptr += (S[j] >> 24);
+        }
+        bufptr &= 0xFF;
 
-        /* Modify the salt buffer */
-        neoscrypt_xor(&B[bufptr], &prf_output[0], prf_output_size);
+        neoscrypt_xor(&B[bufptr], &S[0], 32);
 
-        /* Head modified, tail updated */
-        if(bufptr < prf_key_size)
-          neoscrypt_copy(&B[kdf_buf_size + bufptr], &B[bufptr], MIN(prf_output_size, prf_key_size - bufptr));
-
-        /* Tail modified, head updated */
-        if((kdf_buf_size - bufptr) < prf_output_size)
-          neoscrypt_copy(&B[0], &B[kdf_buf_size], prf_output_size - (kdf_buf_size - bufptr));
+        if(bufptr < 32)
+          neoscrypt_copy(&B[256 + bufptr], &B[bufptr], 32 - bufptr);
+        else if(bufptr > 224)
+          neoscrypt_copy(&B[0], &B[256], bufptr - 224);
 
     }
 
-    /* Modify and copy into the output buffer */
-    if(output_len > kdf_buf_size)
-       output_len = kdf_buf_size;
-
-    a = kdf_buf_size - bufptr;
-    if(a >= output_len) {
+    i = 256 - bufptr;
+    if(i >= output_len) {
         neoscrypt_xor(&B[bufptr], &A[0], output_len);
         neoscrypt_copy(&output[0], &B[bufptr], output_len);
     } else {
-        neoscrypt_xor(&B[bufptr], &A[0], a);
-        neoscrypt_xor(&B[0], &A[a], output_len - a);
-        neoscrypt_copy(&output[0], &B[bufptr], a);
-        neoscrypt_copy(&output[a], &B[0], output_len - a);
+        neoscrypt_xor(&B[bufptr], &A[0], i);
+        neoscrypt_xor(&B[0], &A[i], output_len - i);
+        neoscrypt_copy(&output[0], &B[bufptr], i);
+        neoscrypt_copy(&output[i], &B[0], output_len - i);
     }
-
 }
 
 
@@ -512,96 +1735,101 @@ static void neoscrypt_blkmix(uint *X, uint *Y, uint r, uint mixmode) {
          Xc" = Yb; Xd" = Yd; */
 
     if(r == 1) {
-        neoscrypt_blkxor(&X[0], &X[16], SCRYPT_BLOCK_SIZE);
-        if(mixer)
-          neoscrypt_chacha(&X[0], rounds);
-        else
-          neoscrypt_salsa(&X[0], rounds);
-        neoscrypt_blkxor(&X[16], &X[0], SCRYPT_BLOCK_SIZE);
-        if(mixer)
-          neoscrypt_chacha(&X[16], rounds);
-        else
-          neoscrypt_salsa(&X[16], rounds);
+        if(mixer) {
+            neoscrypt_blkxor(&X[0], &X[16], BLOCK_SIZE);
+            neoscrypt_chacha(&X[0], rounds);
+            neoscrypt_blkxor(&X[16], &X[0], BLOCK_SIZE);
+            neoscrypt_chacha(&X[16], rounds);
+        } else {
+            neoscrypt_blkxor(&X[0], &X[16], BLOCK_SIZE);
+            neoscrypt_salsa(&X[0], rounds);
+            neoscrypt_blkxor(&X[16], &X[0], BLOCK_SIZE);
+            neoscrypt_salsa(&X[16], rounds);
+        }
         return;
     }
 
     if(r == 2) {
-        neoscrypt_blkxor(&X[0], &X[48], SCRYPT_BLOCK_SIZE);
-        if(mixer)
-          neoscrypt_chacha(&X[0], rounds);
-        else
-          neoscrypt_salsa(&X[0], rounds);
-        neoscrypt_blkxor(&X[16], &X[0], SCRYPT_BLOCK_SIZE);
-        if(mixer)
-          neoscrypt_chacha(&X[16], rounds);
-        else
-          neoscrypt_salsa(&X[16], rounds);
-        neoscrypt_blkxor(&X[32], &X[16], SCRYPT_BLOCK_SIZE);
-        if(mixer)
-          neoscrypt_chacha(&X[32], rounds);
-        else
-          neoscrypt_salsa(&X[32], rounds);
-        neoscrypt_blkxor(&X[48], &X[32], SCRYPT_BLOCK_SIZE);
-        if(mixer)
-          neoscrypt_chacha(&X[48], rounds);
-        else
-          neoscrypt_salsa(&X[48], rounds);
-        neoscrypt_blkswp(&X[16], &X[32], SCRYPT_BLOCK_SIZE);
+        if(mixer) {
+            neoscrypt_blkxor(&X[0], &X[48], BLOCK_SIZE);
+            neoscrypt_chacha(&X[0], rounds);
+            neoscrypt_blkxor(&X[16], &X[0], BLOCK_SIZE);
+            neoscrypt_chacha(&X[16], rounds);
+            neoscrypt_blkxor(&X[32], &X[16], BLOCK_SIZE);
+            neoscrypt_chacha(&X[32], rounds);
+            neoscrypt_blkxor(&X[48], &X[32], BLOCK_SIZE);
+            neoscrypt_chacha(&X[48], rounds);
+            neoscrypt_blkswp(&X[16], &X[32], BLOCK_SIZE);
+        } else {
+            neoscrypt_blkxor(&X[0], &X[48], BLOCK_SIZE);
+            neoscrypt_salsa(&X[0], rounds);
+            neoscrypt_blkxor(&X[16], &X[0], BLOCK_SIZE);
+            neoscrypt_salsa(&X[16], rounds);
+            neoscrypt_blkxor(&X[32], &X[16], BLOCK_SIZE);
+            neoscrypt_salsa(&X[32], rounds);
+            neoscrypt_blkxor(&X[48], &X[32], BLOCK_SIZE);
+            neoscrypt_salsa(&X[48], rounds);
+            neoscrypt_blkswp(&X[16], &X[32], BLOCK_SIZE);
+        }
         return;
     }
 
     /* Reference code for any reasonable r */
     for(i = 0; i < 2 * r; i++) {
-        if(i) neoscrypt_blkxor(&X[16 * i], &X[16 * (i - 1)], SCRYPT_BLOCK_SIZE);
-        else  neoscrypt_blkxor(&X[0], &X[16 * (2 * r - 1)], SCRYPT_BLOCK_SIZE);
+        if(i) neoscrypt_blkxor(&X[16 * i], &X[16 * (i - 1)], BLOCK_SIZE);
+        else  neoscrypt_blkxor(&X[0], &X[16 * (2 * r - 1)], BLOCK_SIZE);
         if(mixer)
           neoscrypt_chacha(&X[16 * i], rounds);
         else
           neoscrypt_salsa(&X[16 * i], rounds);
-        neoscrypt_blkcpy(&Y[16 * i], &X[16 * i], SCRYPT_BLOCK_SIZE);
+        neoscrypt_blkcpy(&Y[16 * i], &X[16 * i], BLOCK_SIZE);
     }
     for(i = 0; i < r; i++)
-      neoscrypt_blkcpy(&X[16 * i], &Y[16 * 2 * i], SCRYPT_BLOCK_SIZE);
+      neoscrypt_blkcpy(&X[16 * i], &Y[16 * 2 * i], BLOCK_SIZE);
     for(i = 0; i < r; i++)
-      neoscrypt_blkcpy(&X[16 * (i + r)], &Y[16 * (2 * i + 1)], SCRYPT_BLOCK_SIZE);
+      neoscrypt_blkcpy(&X[16 * (i + r)], &Y[16 * (2 * i + 1)], BLOCK_SIZE);
 }
+
 
 /* NeoScrypt core engine:
  * N = 128, r = 2, p = 1, salt = password */
 void neoscrypt(const uchar *password, uchar *output) {
-    uint N = 128, r = 2, mixmode = 0x14, stack_align = 0x40;
+    const size_t stack_align = 0x40;
+    uint N = 128, r = 2, mixmode = 0x14;
     uint i, j;
     uint *X, *Y, *Z, *V;
 
-    uchar stack[(N + 3) * r * 2 * SCRYPT_BLOCK_SIZE + stack_align];
-    /* X = r * 2 * SCRYPT_BLOCK_SIZE */
-    X = (uint *) &stack[stack_align & ~(stack_align - 1)];
+    uchar stack[(N + 3) * r * 2 * BLOCK_SIZE + stack_align];
+    /* X = r * 2 * BLOCK_SIZE */
+    X = (uint *) (((size_t)stack & ~(stack_align - 1)) + stack_align);
     /* Z is a copy of X for ChaCha */
     Z = &X[32 * r];
     /* Y is an X sized temporal space */
     Y = &X[64 * r];
-    /* V = N * r * 2 * SCRYPT_BLOCK_SIZE */
+    /* V = N * r * 2 * BLOCK_SIZE */
     V = &X[96 * r];
 
-    neoscrypt_fastkdf(password, 80, password, 80, 32, (uchar *) X, r * 2 * SCRYPT_BLOCK_SIZE);
+    /* X = KDF(password, salt) */
+    neoscrypt_fastkdf_opt(password, password, (uchar *) X, 0);
 
-    /* Process ChaCha 1st, Salsa 2nd and XOR them into PBKDF2 */
+    /* Process ChaCha 1st, Salsa 2nd and XOR them into FastKDF */
 
     /* blkcpy(Z, X) */
-    neoscrypt_blkcpy(&Z[0], &X[0], r * 2 * SCRYPT_BLOCK_SIZE);
+    neoscrypt_blkcpy(&Z[0], &X[0], r * 2 * BLOCK_SIZE);
 
     /* Z = SMix(Z) */
     for(i = 0; i < N; i++) {
         /* blkcpy(V, Z) */
-        neoscrypt_blkcpy(&V[i * (32 * r)], &Z[0], r * 2 * SCRYPT_BLOCK_SIZE);
+        neoscrypt_blkcpy(&V[i * (32 * r)], &Z[0], r * 2 * BLOCK_SIZE);
         /* blkmix(Z, Y) */
         neoscrypt_blkmix(&Z[0], &Y[0], r, (mixmode | 0x0100));
     }
+
     for(i = 0; i < N; i++) {
         /* integerify(Z) mod N */
         j = (32 * r) * (Z[16 * (2 * r - 1)] & (N - 1));
         /* blkxor(Z, V) */
-        neoscrypt_blkxor(&Z[0], &V[j], r * 2 * SCRYPT_BLOCK_SIZE);
+        neoscrypt_blkxor(&Z[0], &V[j], r * 2 * BLOCK_SIZE);
         /* blkmix(Z, Y) */
         neoscrypt_blkmix(&Z[0], &Y[0], r, (mixmode | 0x0100));
     }
@@ -609,23 +1837,24 @@ void neoscrypt(const uchar *password, uchar *output) {
     /* X = SMix(X) */
     for(i = 0; i < N; i++) {
         /* blkcpy(V, X) */
-        neoscrypt_blkcpy(&V[i * (32 * r)], &X[0], r * 2 * SCRYPT_BLOCK_SIZE);
+        neoscrypt_blkcpy(&V[i * (32 * r)], &X[0], r * 2 * BLOCK_SIZE);
         /* blkmix(X, Y) */
         neoscrypt_blkmix(&X[0], &Y[0], r, mixmode);
     }
+
     for(i = 0; i < N; i++) {
         /* integerify(X) mod N */
         j = (32 * r) * (X[16 * (2 * r - 1)] & (N - 1));
         /* blkxor(X, V) */
-        neoscrypt_blkxor(&X[0], &V[j], r * 2 * SCRYPT_BLOCK_SIZE);
+        neoscrypt_blkxor(&X[0], &V[j], r * 2 * BLOCK_SIZE);
         /* blkmix(X, Y) */
         neoscrypt_blkmix(&X[0], &Y[0], r, mixmode);
     }
 
     /* blkxor(X, Z) */
-    neoscrypt_blkxor(&X[0], &Z[0], r * 2 * SCRYPT_BLOCK_SIZE);
+    neoscrypt_blkxor(&X[0], &Z[0], r * 2 * BLOCK_SIZE);
 
     /* output = KDF(password, X) */
-    neoscrypt_fastkdf(password, 80, (uchar *) X, r * 2 * SCRYPT_BLOCK_SIZE, 32, output, 32);
+    neoscrypt_fastkdf_opt(password, (uchar *) X, output, 1);
 
 }
