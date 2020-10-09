@@ -10,9 +10,8 @@ P2P_PREFIX = 'FED0D8C3'.decode('hex')
 P2P_PORT = 9555
 ADDRESS_VERSION = 56
 RPC_PORT = 9554
-RPC_CHECK = defer.inlineCallbacks(lambda daemon: defer.returnValue(
-  'phoenixcoinaddress' in (yield daemon.rpc_help()) and
-  not (yield daemon.rpc_getinfo())['testnet']))
+RPC_CHECK = defer.inlineCallbacks(lambda phoenixcoind: defer.returnValue(
+(yield helper.check_genesis_block(phoenixcoind, 'be2f30f9e8db8f430056869c43503a992d232b28508e83eda101161a18cf7c73'))))
 SUBSIDY_FUNC = lambda height: 50*100000000 >> (height + 1)//1000000
 POW_FUNC = lambda data: pack.IntType(256).unpack(__import__('neoscrypt').getPoWHash(data))
 BLOCK_PERIOD = 90
