@@ -10,13 +10,15 @@ class EarlyEnd(Exception):
 class LateEnd(Exception):
     pass
 
-def read((data, pos), length):
+def read(xxx_todo_changeme, length):
+    (data, pos) = xxx_todo_changeme
     data2 = data[pos:pos + length]
     if len(data2) != length:
         raise EarlyEnd()
     return data2, (data, pos + length)
 
-def size((data, pos)):
+def size(xxx_todo_changeme1):
+    (data, pos) = xxx_todo_changeme1
     return len(data) - pos
 
 class Type(object):
@@ -26,9 +28,9 @@ class Type(object):
         rval = getattr(self, '_hash', None)
         if rval is None:
             try:
-                rval = self._hash = hash((type(self), frozenset(self.__dict__.items())))
+                rval = self._hash = hash((type(self), frozenset(list(self.__dict__.items()))))
             except:
-                print self.__dict__
+                print(self.__dict__)
                 raise
         return rval
     
@@ -140,7 +142,7 @@ class EnumType(Type):
         self.pack_to_unpack = pack_to_unpack
         
         self.unpack_to_pack = {}
-        for k, v in pack_to_unpack.iteritems():
+        for k, v in pack_to_unpack.items():
             if v in self.unpack_to_pack:
                 raise ValueError('duplicate value in pack_to_unpack')
             self.unpack_to_pack[v] = k
@@ -167,7 +169,7 @@ class ListType(Type):
         length, file = self._inner_size.read(file)
         length *= self.mul
         res = [None]*length
-        for i in xrange(length):
+        for i in range(length):
             res[i], file = self.type.read(file)
         return res, file
     
@@ -230,13 +232,13 @@ class IPV6AddressType(Type):
         data, file = read(file, 16)
         if data[:12] == '00000000000000000000ffff'.decode('hex'):
             return '.'.join(str(ord(x)) for x in data[12:]), file
-        return ':'.join(data[i*2:(i+1)*2].encode('hex') for i in xrange(8)), file
+        return ':'.join(data[i*2:(i+1)*2].encode('hex') for i in range(8)), file
     
     def write(self, file, item):
         if ':' in item:
             data = ''.join(item.replace(':', '')).decode('hex')
         else:
-            bits = map(int, item.split('.'))
+            bits = list(map(int, item.split('.')))
             if len(bits) != 4:
                 raise ValueError('invalid address: %r' % (bits,))
             data = '00000000000000000000ffff'.decode('hex') + ''.join(chr(x) for x in bits)

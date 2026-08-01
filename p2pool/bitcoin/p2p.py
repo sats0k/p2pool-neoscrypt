@@ -75,7 +75,7 @@ class Protocol(p2protocol.Protocol):
             elif inv['type'] == 'block':
                 self.factory.new_block.happened(inv['hash'])
             else:
-                print 'Unknown inv type', inv
+                print('Unknown inv type', inv)
     
     message_getdata = pack.ComposedType([
         ('requests', pack.ListType(pack.ComposedType([
@@ -153,7 +153,7 @@ class Protocol(p2protocol.Protocol):
         if hasattr(self, 'pinger'):
             self.pinger.stop()
         if p2pool.DEBUG:
-            print >>sys.stderr, 'Daemon connection lost. Reason:', reason.getErrorMessage()
+            print('Daemon connection lost. Reason:', reason.getErrorMessage(), file=sys.stderr)
 
 class ClientFactory(protocol.ReconnectingClientFactory):
     protocol = Protocol

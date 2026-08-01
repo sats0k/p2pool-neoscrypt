@@ -11,10 +11,10 @@ from p2pool.util import deferral, jsonrpc
 @defer.inlineCallbacks
 def check(daemon, net):
     if not (yield net.PARENT.RPC_CHECK(daemon)):
-        print >>sys.stderr, "    Check failed! Make sure that you're connected to the right daemon with --daemon-rpc-port!"
+        print("    Check failed! Make sure that you're connected to the right daemon with --daemon-rpc-port!", file=sys.stderr)
         raise deferral.RetrySilentlyException()
     if not net.VERSION_CHECK((yield daemon.rpc_getinfo())['version']):
-        print >>sys.stderr, '    Bitcoin version too old! Upgrade to 0.6.4 or newer!'
+        print('    Bitcoin version too old! Upgrade to 0.6.4 or newer!', file=sys.stderr)
         raise deferral.RetrySilentlyException()
 
 @deferral.retry('Error getting work from the daemon:', 3)
@@ -36,7 +36,7 @@ def getwork(daemon, use_getblocktemplate=False):
             work = yield go()
             end = time.time()
         except jsonrpc.Error_for_code(-32601): # Method not found
-            print >>sys.stderr, 'Error: Daemon version too old!'
+            print('Error: Daemon version too old!', file=sys.stderr)
             raise deferral.RetrySilentlyException()
     packed_transactions = [(x['data'] if isinstance(x, dict) else x).decode('hex') for x in work['transactions']]
     if 'height' not in work:
@@ -46,13 +46,13 @@ def getwork(daemon, use_getblocktemplate=False):
     defer.returnValue(dict(
         version=work['version'],
         previous_block=int(work['previousblockhash'], 16),
-        transactions=map(bitcoin_data.tx_type.unpack, packed_transactions),
-        transaction_hashes=map(bitcoin_data.hash256, packed_transactions),
+        transactions=list(map(bitcoin_data.tx_type.unpack, packed_transactions)),
+        transaction_hashes=list(map(bitcoin_data.hash256, packed_transactions)),
         transaction_fees=[x.get('fee', None) if isinstance(x, dict) else None for x in work['transactions']],
         subsidy=work['coinbasevalue'],
         time=work['time'] if 'time' in work else work['curtime'],
-        bits=bitcoin_data.FloatingIntegerType().unpack(work['bits'].decode('hex')[::-1]) if isinstance(work['bits'], (str, unicode)) else bitcoin_data.FloatingInteger(work['bits']),
-        coinbaseflags=work['coinbaseflags'].decode('hex') if 'coinbaseflags' in work else ''.join(x.decode('hex') for x in work['coinbaseaux'].itervalues()) if 'coinbaseaux' in work else '',
+        bits=bitcoin_data.FloatingIntegerType().unpack(work['bits'].decode('hex')[::-1]) if isinstance(work['bits'], str) else bitcoin_data.FloatingInteger(work['bits']),
+        coinbaseflags=work['coinbaseflags'].decode('hex') if 'coinbaseflags' in work else ''.join(x.decode('hex') for x in work['coinbaseaux'].values()) if 'coinbaseaux' in work else '',
         height=work['height'],
         last_update=time.time(),
         use_getblocktemplate=use_getblocktemplate,
@@ -62,7 +62,7 @@ def getwork(daemon, use_getblocktemplate=False):
 @deferral.retry('Error submitting primary block: (will retry)', 10, 10)
 def submit_block_p2p(block, factory, net):
     if factory.conn.value is None:
-        print >>sys.stderr, 'No daemon connection when block submittal attempted! %s%064x' % (net.PARENT.BLOCK_EXPLORER_URL_PREFIX, bitcoin_data.hash256(bitcoin_data.block_header_type.pack(block['header'])))
+        print('No daemon connection when block submittal attempted! %s%064x' % (net.PARENT.BLOCK_EXPLORER_URL_PREFIX, bitcoin_data.hash256(bitcoin_data.block_header_type.pack(block['header']))), file=sys.stderr)
         raise deferral.RetrySilentlyException()
     factory.conn.value.send_block(block=block)
 
@@ -80,7 +80,7 @@ def submit_block_rpc(block, ignore_failure, daemon, daemon_work, net):
         success = result
     success_expected = net.PARENT.POW_FUNC(bitcoin_data.block_header_type.pack(block['header'])) <= block['header']['bits'].target
     if (not success and success_expected and not ignore_failure) or (success and not success_expected):
-        print >>sys.stderr, 'Block submittal result: %s (%r) Expected: %s' % (success, result, success_expected)
+        print('Block submittal result: %s (%r) Expected: %s' % (success, result, success_expected), file=sys.stderr)
 
 def submit_block(block, ignore_failure, factory, daemon, daemon_work, net):
     submit_block_p2p(block, factory, net)

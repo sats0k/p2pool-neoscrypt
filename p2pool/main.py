@@ -1,4 +1,4 @@
-from __future__ import division
+
 
 import base64
 import gc
@@ -9,7 +9,7 @@ import sys
 import time
 import signal
 import traceback
-import urlparse
+import urllib.parse
 
 if '--iocp' in sys.argv:
     from twisted.internet import iocpreactor
@@ -19,31 +19,31 @@ from twisted.web import server
 from twisted.python import log
 from nattraverso import portmapper, ipdiscover
 
-import bitcoin.p2p as bitcoin_p2p, bitcoin.data as bitcoin_data
-from bitcoin import stratum, worker_interface, helper
-from util import fixargparse, jsonrpc, variable, deferral, math, logging, switchprotocol
+from . import bitcoin.p2p as bitcoin_p2p, bitcoin.data as bitcoin_data
+from .bitcoin import stratum, worker_interface, helper
+from .util import fixargparse, jsonrpc, variable, deferral, math, logging, switchprotocol
 from . import networks, web, work
 import p2pool, p2pool.data as p2pool_data, p2pool.node as p2pool_node
 
 @defer.inlineCallbacks
 def main(args, net, datadir_path, merged_urls, worker_endpoint):
     try:
-        print 'P2Pool (version %s)' % (p2pool.__version__,)
-        print
+        print('P2Pool (version %s)' % (p2pool.__version__,))
+        print()
         
         @defer.inlineCallbacks
         def connect_p2p():
             # connect to daemon over bitcoin-p2p
-            print '''Testing daemon P2P connection to '%s:%s'...''' % (args.daemon_address, args.daemon_p2p_port)
+            print('''Testing daemon P2P connection to '%s:%s'...''' % (args.daemon_address, args.daemon_p2p_port))
             factory = bitcoin_p2p.ClientFactory(net.PARENT)
             reactor.connectTCP(args.daemon_address, args.daemon_p2p_port, factory)
             def long():
-                print '''    ...taking a while. Common reasons for this include all of daemon's connection slots being used...'''
-            long_dc = reactor.callLater(5, long)
+                print('''    ...taking a while. Common reasons for this include all of daemon's connection slots being used...''')
+            long_dc = reactor.callLater(5, int)
             yield factory.getProtocol() # waits until handshake is successful
             if not long_dc.called: long_dc.cancel()
-            print '    ...success!'
-            print
+            print('    ...success!')
+            print()
             defer.returnValue(factory)
         
         if args.testnet: # establish p2p connection first if testnet so daemon can work without connections
@@ -51,7 +51,7 @@ def main(args, net, datadir_path, merged_urls, worker_endpoint):
         
         # connect to daemon over JSON-RPC and do initial getmemorypool
         url = '%s://%s:%i/' % ('https' if args.daemon_rpc_ssl else 'http', args.daemon_address, args.daemon_rpc_port)
-        print '''Testing daemon RPC connection to '%s' with username '%s'...''' % (url, args.daemon_rpc_username)
+        print('''Testing daemon RPC connection to '%s' with username '%s'...''' % (url, args.daemon_rpc_username))
         daemon = jsonrpc.HTTPProxy(url, dict(Authorization='Basic ' + base64.b64encode(args.daemon_rpc_username + ':' + args.daemon_rpc_password)), timeout=30)
         yield helper.check(daemon, net)
         temp_work = yield helper.getwork(daemon)
@@ -63,33 +63,33 @@ def main(args, net, datadir_path, merged_urls, worker_endpoint):
         yield poll_warnings()
         deferral.RobustLoopingCall(poll_warnings).start(20*60)
         
-        print '    ...success!'
-        print '    Current block hash: %x' % (temp_work['previous_block'],)
-        print '    Current block height: %i' % (temp_work['height'] - 1,)
-        print
+        print('    ...success!')
+        print('    Current block hash: %x' % (temp_work['previous_block'],))
+        print('    Current block height: %i' % (temp_work['height'] - 1,))
+        print()
         
         if not args.testnet:
             factory = yield connect_p2p()
         
-        print 'Determining payout address...'
+        print('Determining payout address...')
         if args.pubkey_hash is None:
             address_path = os.path.join(datadir_path, 'cached_payout_address')
             
             if os.path.exists(address_path):
                 with open(address_path, 'rb') as f:
                     address = f.read().strip('\r\n')
-                print '    Loaded cached address: %s...' % (address,)
+                print('    Loaded cached address: %s...' % (address,))
             else:
                 address = None
             
             if address is not None:
                 res = yield deferral.retry('Error validating cached address:', 5)(lambda: daemon.rpc_validateaddress(address))()
                 if not res['isvalid'] or not res['ismine']:
-                    print '    Cached address is either invalid or not controlled by local daemon!'
+                    print('    Cached address is either invalid or not controlled by local daemon!')
                     address = None
             
             if address is None:
-                print '    Getting payout address from daemon...'
+                print('    Getting payout address from daemon...')
                 address = yield deferral.retry('Error getting payout address from daemon:', 5)(lambda: daemon.rpc_getaccountaddress('p2pool'))()
             
             with open(address_path, 'wb') as f:
@@ -98,25 +98,25 @@ def main(args, net, datadir_path, merged_urls, worker_endpoint):
             my_pubkey_hash = bitcoin_data.address_to_pubkey_hash(address, net.PARENT)
         else:
             my_pubkey_hash = args.pubkey_hash
-        print '    ...success! Payout address:', bitcoin_data.pubkey_hash_to_address(my_pubkey_hash, net.PARENT)
-        print
+        print('    ...success! Payout address:', bitcoin_data.pubkey_hash_to_address(my_pubkey_hash, net.PARENT))
+        print()
         
-        print "Loading shares..."
+        print("Loading shares...")
         shares = {}
         known_verified = set()
         def share_cb(share):
             share.time_seen = 0 # XXX
             shares[share.hash] = share
             if len(shares) % 1000 == 0 and shares:
-                print "    %i" % (len(shares),)
+                print("    %i" % (len(shares),))
         ss = p2pool_data.ShareStore(os.path.join(datadir_path, 'shares.'), net, share_cb, known_verified.add)
-        print "    ...done loading %i shares (%i verified)!" % (len(shares), len(known_verified))
-        print
+        print("    ...done loading %i shares (%i verified)!" % (len(shares), len(known_verified)))
+        print()
         
         
-        print 'Initializing work...'
+        print('Initializing work...')
         
-        node = p2pool_node.Node(factory, daemon, shares.values(), known_verified, net)
+        node = p2pool_node.Node(factory, daemon, list(shares.values()), known_verified, net)
         yield node.start()
         
         for share_hash in shares:
@@ -135,11 +135,11 @@ def main(args, net, datadir_path, merged_urls, worker_endpoint):
                     ss.add_verified_hash(share.hash)
         deferral.RobustLoopingCall(save_shares).start(60)
         
-        print '    ...success!'
-        print
+        print('    ...success!')
+        print()
         
         
-        print 'Joining P2Pool network using port %i...' % (args.p2pool_port,)
+        print('Joining P2Pool network using port %i...' % (args.p2pool_port,))
         
         @defer.inlineCallbacks
         def parse(host):
@@ -155,7 +155,7 @@ def main(args, net, datadir_path, merged_urls, worker_endpoint):
                 with open(os.path.join(datadir_path, 'addrs'), 'rb') as f:
                     addrs.update(dict((tuple(k), v) for k, v in json.loads(f.read())))
             except:
-                print >>sys.stderr, 'error parsing addrs'
+                print('error parsing addrs', file=sys.stderr)
         for addr_df in map(parse, net.BOOTSTRAP_ADDRS):
             try:
                 addr = yield addr_df
@@ -183,11 +183,11 @@ def main(args, net, datadir_path, merged_urls, worker_endpoint):
         
         def save_addrs():
             with open(os.path.join(datadir_path, 'addrs'), 'wb') as f:
-                f.write(json.dumps(node.p2p_node.addr_store.items()))
+                f.write(json.dumps(list(node.p2p_node.addr_store.items())))
         deferral.RobustLoopingCall(save_addrs).start(60)
         
-        print '    ...success!'
-        print
+        print('    ...success!')
+        print()
         
         if args.upnp:
             @defer.inlineCallbacks
@@ -208,7 +208,7 @@ def main(args, net, datadir_path, merged_urls, worker_endpoint):
         
         # start listening for workers with a JSON-RPC server
         
-        print 'Listening for workers on %r port %i...' % (worker_endpoint[0], worker_endpoint[1])
+        print('Listening for workers on %r port %i...' % (worker_endpoint[0], worker_endpoint[1]))
         
         
         if args.address_share_rate is not None:
@@ -231,20 +231,20 @@ def main(args, net, datadir_path, merged_urls, worker_endpoint):
         with open(os.path.join(os.path.join(datadir_path, 'ready_flag')), 'wb') as f:
             pass
         
-        print '    ...success!'
-        print
+        print('    ...success!')
+        print()
         
         
         # done!
-        print 'Started successfully!'
-        print 'Go to http://127.0.0.1:%i/ to view graphs and statistics!' % (worker_endpoint[1],)
+        print('Started successfully!')
+        print('Go to http://127.0.0.1:%i/ to view graphs and statistics!' % (worker_endpoint[1],))
         if args.donation_percentage > 1.5:
-            print '''Donating %.1f%% of work towards the NeoScrypt development. Thank you very much!''' % (args.donation_percentage,)
+            print('''Donating %.1f%% of work towards the NeoScrypt development. Thank you very much!''' % (args.donation_percentage,))
         elif args.donation_percentage < .5:
-            print '''Donating %.1f%% of work towards the NeoScrypt development :(''' % (args.donation_percentage,)
+            print('''Donating %.1f%% of work towards the NeoScrypt development :(''' % (args.donation_percentage,))
         else:
-            print '''Donating %.1f%% of work towards the NeoScrypt development. Thanks for your support.''' % (args.donation_percentage,)
-        print
+            print('''Donating %.1f%% of work towards the NeoScrypt development. Thanks for your support.''' % (args.donation_percentage,))
+        print()
         
         
         if hasattr(signal, 'SIGALRM'):
@@ -261,7 +261,7 @@ def main(args, net, datadir_path, merged_urls, worker_endpoint):
                 channel = net.ANNOUNCE_CHANNEL
                 def lineReceived(self, line):
                     if p2pool.DEBUG:
-                        print repr(line)
+                        print(repr(line))
                     irc.IRCClient.lineReceived(self, line)
                 def signedOn(self):
                     self.in_channel = False
@@ -293,7 +293,7 @@ def main(args, net, datadir_path, merged_urls, worker_endpoint):
                         self._remember_message(message)
                 def connectionLost(self, reason):
                     node.tracker.verified.added.unwatch(self.watch_id)
-                    print 'IRC connection lost:', reason.getErrorMessage()
+                    print('IRC connection lost:', reason.getErrorMessage())
             class IRCClientFactory(protocol.ReconnectingClientFactory):
                 protocol = IRCClient
             reactor.connectTCP("irc.freenode.net", 6667, IRCClientFactory(), bindAddress=(worker_endpoint[0], 0))
@@ -311,7 +311,7 @@ def main(args, net, datadir_path, merged_urls, worker_endpoint):
                         len(node.tracker.verified.items),
                         len(node.tracker.items),
                         len(node.p2p_node.peers),
-                        sum(1 for peer in node.p2p_node.peers.itervalues() if peer.incoming),
+                        sum(1 for peer in node.p2p_node.peers.values() if peer.incoming),
                     ) + (' FDs: %i R/%i W' % (len(reactor.getReaders()), len(reactor.getWriters())) if p2pool.DEBUG else '')
                     
                     datums, dt = wb.local_rate_monitor.get_datums_in_last()
@@ -342,15 +342,15 @@ def main(args, net, datadir_path, merged_urls, worker_endpoint):
                         )
                         
                         for warning in p2pool_data.get_warnings(node.tracker, node.best_share_var.value, net, daemon_getinfo_var.value, node.daemon_work.value):
-                            print >>sys.stderr, '#'*40
-                            print >>sys.stderr, '>>> Warning: ' + warning
-                            print >>sys.stderr, '#'*40
+                            print('#'*40, file=sys.stderr)
+                            print('>>> Warning: ' + warning, file=sys.stderr)
+                            print('#'*40, file=sys.stderr)
                         
                         if gc.garbage:
-                            print '%i pieces of uncollectable cyclic garbage! Types: %r' % (len(gc.garbage), map(type, gc.garbage))
+                            print('%i pieces of uncollectable cyclic garbage! Types: %r' % (len(gc.garbage), list(map(type, gc.garbage))))
                     
                     if this_str != last_str or time.time() > last_time + 15:
-                        print this_str
+                        print(this_str)
                         last_str = this_str
                         last_time = time.time()
                 except:
@@ -362,11 +362,11 @@ def main(args, net, datadir_path, merged_urls, worker_endpoint):
 
 def run():
     if not hasattr(tcp.Client, 'abortConnection'):
-        print "Twisted doesn't have abortConnection! Upgrade to a newer version of Twisted to avoid memory leaks!"
-        print 'Pausing for 3 seconds...'
+        print("Twisted doesn't have abortConnection! Upgrade to a newer version of Twisted to avoid memory leaks!")
+        print('Pausing for 3 seconds...')
         time.sleep(3)
     
-    realnets = dict((name, net) for name, net in networks.nets.iteritems() if '_testnet' not in name)
+    realnets = dict((name, net) for name, net in networks.nets.items() if '_testnet' not in name)
     
     parser = fixargparse.FixedArgumentParser(description='P2Pool (version %s)' % (p2pool.__version__,), fromfile_prefix_chars='@')
     parser.add_argument('--version', action='version', version=p2pool.__version__)
@@ -539,18 +539,18 @@ def run():
     if args.address is not None:
         try:
             args.pubkey_hash = bitcoin_data.address_to_pubkey_hash(args.address, net.PARENT)
-        except Exception, e:
+        except Exception as e:
             parser.error('error parsing address: ' + repr(e))
     else:
         args.pubkey_hash = None
     
     def separate_url(url):
-        s = urlparse.urlsplit(url)
+        s = urllib.parse.urlsplit(url)
         if '@' not in s.netloc:
             parser.error('merged url netloc must contain an "@"')
         userpass, new_netloc = s.netloc.rsplit('@', 1)
-        return urlparse.urlunsplit(s._replace(netloc=new_netloc)), userpass
-    merged_urls = map(separate_url, args.merged_urls)
+        return urllib.parse.urlunsplit(s._replace(netloc=new_netloc)), userpass
+    merged_urls = list(map(separate_url, args.merged_urls))
     
     if args.logfile is None:
         args.logfile = os.path.join(datadir_path, 'log')
@@ -561,9 +561,9 @@ def run():
     sys.stderr = log.DefaultObserver.stderr = logging.AbortPipe(logging.PrefixPipe(pipe, '> '))
     if hasattr(signal, "SIGUSR1"):
         def sigusr1(signum, frame):
-            print 'Caught SIGUSR1, closing %r...' % (args.logfile,)
+            print('Caught SIGUSR1, closing %r...' % (args.logfile,))
             logfile.reopen()
-            print '...and reopened %r after catching SIGUSR1.' % (args.logfile,)
+            print('...and reopened %r after catching SIGUSR1.' % (args.logfile,))
         signal.signal(signal.SIGUSR1, sigusr1)
     deferral.RobustLoopingCall(logfile.reopen).start(5)
     

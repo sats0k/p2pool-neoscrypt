@@ -1,4 +1,4 @@
-from __future__ import division
+
 
 import hashlib
 import random
@@ -6,6 +6,7 @@ import warnings
 
 import p2pool
 from p2pool.util import math, pack
+from functools import reduce
 
 def hash256(data):
     return pack.IntType(256).unpack(hashlib.sha256(hashlib.sha256(data).digest()).digest())
@@ -149,7 +150,7 @@ aux_pow_coinbase_type = pack.ComposedType([
 ])
 
 def make_auxpow_tree(chain_ids):
-    for size in (2**i for i in xrange(31)):
+    for size in (2**i for i in range(31)):
         if size < len(chain_ids):
             continue
         res = {}
@@ -216,7 +217,7 @@ def check_merkle_link(tip_hash, link):
 # targets
 
 def target_to_average_attempts(target):
-    assert 0 <= target and isinstance(target, (int, long)), target
+    assert 0 <= target and isinstance(target, int), target
     if target >= 2**256: warnings.warn('target >= 2**256!')
     return 2**256//(target + 1)
 
@@ -225,7 +226,7 @@ def average_attempts_to_target(average_attempts):
     return min(int(2**256/average_attempts - 1 + 0.5), 2**256-1)
 
 def target_to_difficulty(target):
-    assert 0 <= target and isinstance(target, (int, long)), target
+    assert 0 <= target and isinstance(target, int), target
     if target >= 2**256: warnings.warn('target >= 2**256!')
     return (0xffff0000 * 2**(256-64) + 1)/(target + 1)
 
