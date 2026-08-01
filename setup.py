@@ -16,7 +16,7 @@ if os.path.exists('INITBAK'):
 os.rename(os.path.join('p2pool', '__init__.py'), 'INITBAK')
 try:
     open(os.path.join('p2pool', '__init__.py'), 'wb').write('__version__ = %r%s%sDEBUG = False%s' % (version, os.linesep, os.linesep, os.linesep))
-    mfcdir = get_python_lib() + '\pythonwin\\'
+    mfcdir = get_python_lib() + '\\pythonwin\\'
     mfcfiles = [os.path.join(mfcdir, i) for i in ["mfc90.dll", "mfc90u.dll", "mfcm90.dll", "mfcm90u.dll", "Microsoft.VC90.MFC.manifest"]]
     bundle = 1
     if im64:

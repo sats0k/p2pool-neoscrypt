@@ -46,7 +46,9 @@ def clip(x, xxx_todo_changeme):
     else:
         return x
 
-add_to_range = lambda x, (low, high): (min(low, x), max(high, x))
+def add_to_range(x, bounds):
+    low, high = bounds
+    return (min(low, x), max(high, x))
 
 def nth(i, n=0):
     i = iter(i)

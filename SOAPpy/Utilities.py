@@ -48,7 +48,7 @@ from .Errors import *
 # Utility infielders
 ################################################################################
 def collapseWhiteSpace(s):
-    return re.sub('\s+', ' ', s).strip()
+    return re.sub('\\s+', ' ', s).strip()
 
 def decodeHexString(data):
     conv = {

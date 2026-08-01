@@ -9,7 +9,8 @@ import time
 from twisted.internet import defer
 from twisted.python import log
 
-from . import bitcoin.getwork as bitcoin_getwork, bitcoin.data as bitcoin_data
+from .bitcoin import getwork as bitcoin_getwork
+from .bitcoin import data as bitcoin_data
 from .bitcoin import helper, script, worker_interface
 from .util import forest, jsonrpc, variable, deferral, math, pack
 import p2pool, p2pool.data as p2pool_data
@@ -25,7 +26,7 @@ class WorkerBridge(worker_interface.WorkerBridge):
         self.my_pubkey_hash = my_pubkey_hash
         self.donation_percentage = donation_percentage
         self.worker_fee = worker_fee
-	self.share_rate = share_rate
+        self.share_rate = share_rate
         self.share_rate_type = share_rate_type
 
         self.net = self.node.net.PARENT
@@ -278,24 +279,35 @@ class WorkerBridge(worker_interface.WorkerBridge):
                     )
         
         if True:
+
+            def _stale_info(stale_counts, total, recorded_counts):
+                orphans, doas = stale_counts
+                orphans_recorded_in_chain, doas_recorded_in_chain = recorded_counts
+
+                if orphans > orphans_recorded_in_chain:
+                    return 'orphan'
+                elif doas > doas_recorded_in_chain:
+                    return 'doa'
+                else:
+                    return None
+
             share_info, gentx, other_transaction_hashes, get_share = share_type.generate_transaction(
                 tracker=self.node.tracker,
                 share_data=dict(
                     previous_share_hash=self.node.best_share_var.value,
                     coinbase=(script.create_push_script([
                         self.current_work.value['height'],
-                        ] + ([mm_data] if mm_data else []) + [
+                    ] + ([mm_data] if mm_data else []) + [
                     ]) + self.current_work.value['coinbaseflags'])[:100],
                     nonce=random.randrange(2**32),
                     pubkey_hash=pubkey_hash,
                     subsidy=self.current_work.value['subsidy'],
                     donation=math.perfect_round(65535*self.donation_percentage/100),
-                    stale_info=(lambda (orphans, doas), total, (orphans_recorded_in_chain, doas_recorded_in_chain):
-                        'orphan' if orphans > orphans_recorded_in_chain else
-                        'doa' if doas > doas_recorded_in_chain else
-                        None
-                    )(*self.get_stale_counts()),
-                    desired_version=(share_type.SUCCESSOR if share_type.SUCCESSOR is not None else share_type).VOTING_VERSION,
+                    stale_info=_stale_info(*self.get_stale_counts()),
+                    desired_version=(
+                        share_type.SUCCESSOR if share_type.SUCCESSOR is not None
+                        else share_type
+                    ).VOTING_VERSION,
                 ),
                 block_target=self.current_work.value['bits'].target,
                 desired_timestamp=int(time.time() + 0.5),
@@ -332,7 +344,7 @@ class WorkerBridge(worker_interface.WorkerBridge):
                 if local_hash_rate is not None:
                     target = min(target,
                         bitcoin_data.average_attempts_to_target(local_hash_rate * 1)) # limit to 1 share response every second by modulating pseudoshare difficulty		
-	    difficulty = bitcoin_data.target_to_difficulty(target)*self.node.net.PARENT.DUMB_SCRYPT_DIFF
+            difficulty = bitcoin_data.target_to_difficulty(target)*self.node.net.PARENT.DUMB_SCRYPT_DIFF
             rounded_difficulty = 1/self.node.net.PARENT.DUMB_SCRYPT_DIFF
             
             while (rounded_difficulty + rounded_difficulty * 2) / 2 < difficulty:
@@ -448,9 +460,9 @@ class WorkerBridge(worker_interface.WorkerBridge):
                 
                 self.share_received.happened(bitcoin_data.target_to_average_attempts(share.target), not on_time, share.hash)
 
-	    if p2pool.DEBUG:
-		print('    Hash:   %X' % (pow_hash,))
-		print('    Target: %X' % (target,))
+            if p2pool.DEBUG:
+                print('    Hash:   %X' % (pow_hash,))
+                print('    Target: %X' % (target,))
 
             if pow_hash > target:
                 print('Worker %s submitted share with hash > target:' % (user,))

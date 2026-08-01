@@ -16,7 +16,12 @@ def _shift(x, shift, pad_item):
     right_pad = math2.clip(-shift, (0, len(x)))
     return [pad_item]*left_pad + x[right_pad:-left_pad if left_pad else None] + [pad_item]*right_pad
 
-combine_bins = math2.add_dicts_ext(lambda (a1, b1), (a2, b2): (a1+a2, b1+b2), (0, 0))
+def _combine_bins(v1, v2):
+    a1, b1 = v1
+    a2, b2 = v2
+    return (a1 + a2, b1 + b2)
+
+combine_bins = math2.add_dicts_ext(_combine_bins, (0, 0))
 
 nothing = object()
 def keep_largest(n, squash_key=nothing, key=lambda x: x, add_func=lambda a, b: a+b):
@@ -83,11 +88,28 @@ class DataView(object):
 
 
 class DataStreamDescription(object):
-    def __init__(self, dataview_descriptions, is_gauge=True, multivalues=False, multivalues_keep=20, multivalues_squash_key=None, multivalue_undefined_means_0=False, default_func=None):
+    def __init__(self, dataview_descriptions, is_gauge=True,
+                 multivalues=False, multivalues_keep=20,
+                 multivalues_squash_key=None,
+                 multivalue_undefined_means_0=False,
+                 default_func=None):
+
         self.dataview_descriptions = dataview_descriptions
         self.is_gauge = is_gauge
         self.multivalues = multivalues
-        self.keep_largest_func = keep_largest(multivalues_keep, multivalues_squash_key, key=lambda t_c: t_c[0]/t_c[1] if self.is_gauge else t_c[0], add_func=lambda (a1, b1), (a2, b2): (a1+a2, b1+b2))
+
+        def _add_multivalues(v1, v2):
+            a1, b1 = v1
+            a2, b2 = v2
+            return (a1 + a2, b1 + b2)
+
+        self.keep_largest_func = keep_largest(
+            multivalues_keep,
+            multivalues_squash_key,
+            key=lambda t_c: t_c[0] / t_c[1] if self.is_gauge else t_c[0],
+            add_func=_add_multivalues,
+        )
+
         self.multivalue_undefined_means_0 = multivalue_undefined_means_0
         self.default_func = default_func
 

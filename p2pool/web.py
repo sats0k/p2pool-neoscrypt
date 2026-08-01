@@ -203,16 +203,33 @@ def get_web_root(wb, datadir_path, daemon_getinfo_var, stop_event=variable.Event
     web_root.putChild('local_stats', WebInterface(get_local_stats))
     web_root.putChild('peer_addresses', WebInterface(lambda: ' '.join('%s%s' % (peer.transport.getPeer().host, ':'+str(peer.transport.getPeer().port) if peer.transport.getPeer().port != node.net.P2P_PORT else '') for peer in node.p2p_node.peers.values())))
     web_root.putChild('peer_txpool_sizes', WebInterface(lambda: dict(('%s:%i' % (peer.transport.getPeer().host, peer.transport.getPeer().port), peer.remembered_txs_size) for peer in node.p2p_node.peers.values())))
-    web_root.putChild('pings', WebInterface(defer.inlineCallbacks(lambda: defer.returnValue(
-        dict([(a, (yield b)) for a, b in
-            [(
-                '%s:%i' % (peer.transport.getPeer().host, peer.transport.getPeer().port),
-                defer.inlineCallbacks(lambda peer=peer: defer.returnValue(
-                    min([(yield peer.do_ping().addCallback(lambda x: x/0.001).addErrback(lambda fail: None)) for i in range(3)])
-                ))()
-            ) for peer in list(node.p2p_node.peers.values())]
-        ])
-    ))))
+    @defer.inlineCallbacks
+    def get_pings():
+        result = {}
+
+        for peer in node.p2p_node.peers.values():
+            addr = "%s:%i" % (
+                peer.transport.getPeer().host,
+                peer.transport.getPeer().port,
+            )
+
+            samples = []
+
+            for _ in range(3):
+                ping = yield (
+                    peer.do_ping()
+                        .addCallback(lambda x: x / 0.001)
+                        .addErrback(lambda fail: None)
+                )
+
+                if ping is not None:
+                    samples.append(ping)
+
+            result[addr] = min(samples) if samples else None
+
+        defer.returnValue(result)
+
+    web_root.putChild('pings', WebInterface(get_pings))
     web_root.putChild('peer_versions', WebInterface(lambda: dict(('%s:%i' % peer.addr, peer.other_sub_version) for peer in node.p2p_node.peers.values())))
     web_root.putChild('payout_addr', WebInterface(lambda: bitcoin_data.pubkey_hash_to_address(wb.my_pubkey_hash, node.net.PARENT)))
     web_root.putChild('recent_blocks', WebInterface(lambda: [dict(

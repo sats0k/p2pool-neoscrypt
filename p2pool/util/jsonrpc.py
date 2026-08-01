@@ -77,7 +77,7 @@ def _handle(data, provider, preargs=(), response_handler=None):
                     provider = getattr(provider, 'svc_' + service_name, None)
                     if provider is None:
                         raise Error_for_code(-32601)('Service not found'+service_name)
-			log.err(None, 'Service not found: '+service_name)
+                        log.err(None, 'Service not found: '+service_name)
                 
                 method_meth = getattr(provider, 'rpc_' + method.split('.')[-1], None)
                 if method_meth is None:

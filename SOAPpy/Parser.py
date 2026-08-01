@@ -466,8 +466,8 @@ class SOAPParser(xml.sax.handler.ContentHandler):
 
     arrayre = '^(?:(?P<ns>[^:]*):)?' \
         '(?P<type>[^[]+)' \
-        '(?:\[(?P<rank>,*)\])?' \
-        '(?:\[(?P<asize>\d+(?:,\d+)*)?\])$'
+        '(?:\\[(?P<rank>,*)\\])?' \
+        '(?:\\[(?P<asize>\\d+(?:,\\d+)*)?\\])$'
 
     def startArray(self, name, kind, attrs, elemsname):
         if type(self.arrayre) == StringType:
@@ -515,17 +515,17 @@ class SOAPParser(xml.sax.handler.ContentHandler):
 
     class DATETIMECONSTS:
         SIGNre = '(?P<sign>-?)'
-        CENTURYre = '(?P<century>\d{2,})'
-        YEARre = '(?P<year>\d{2})'
-        MONTHre = '(?P<month>\d{2})'
-        DAYre = '(?P<day>\d{2})'
-        HOURre = '(?P<hour>\d{2})'
-        MINUTEre = '(?P<minute>\d{2})'
-        SECONDre = '(?P<second>\d{2}(?:\.\d*)?)'
-        TIMEZONEre = '(?P<zulu>Z)|(?P<tzsign>[-+])(?P<tzhour>\d{2}):' \
-            '(?P<tzminute>\d{2})'
-        BOSre = '^\s*'
-        EOSre = '\s*$'
+        CENTURYre = '(?P<century>\\d{2,})'
+        YEARre = '(?P<year>\\d{2})'
+        MONTHre = '(?P<month>\\d{2})'
+        DAYre = '(?P<day>\\d{2})'
+        HOURre = '(?P<hour>\\d{2})'
+        MINUTEre = '(?P<minute>\\d{2})'
+        SECONDre = '(?P<second>\\d{2}(?:\\.\\d*)?)'
+        TIMEZONEre = '(?P<zulu>Z)|(?P<tzsign>[-+])(?P<tzhour>\\d{2}):' \
+            '(?P<tzminute>\\d{2})'
+        BOSre = '^\\s*'
+        EOSre = '\\s*$'
 
         __allres = {'sign': SIGNre, 'century': CENTURYre, 'year': YEARre,
             'month': MONTHre, 'day': DAYre, 'hour': HOURre,
@@ -559,13 +559,13 @@ class SOAPParser(xml.sax.handler.ContentHandler):
             '(%(timezone)s)?%(e)s' % __allres
 
         duration = '%(b)s%(sign)sP' \
-            '((?P<year>\d+)Y)?' \
-            '((?P<month>\d+)M)?' \
-            '((?P<day>\d+)D)?' \
+            '((?P<year>\\d+)Y)?' \
+            '((?P<month>\\d+)M)?' \
+            '((?P<day>\\d+)D)?' \
             '((?P<sep>T)' \
-            '((?P<hour>\d+)H)?' \
-            '((?P<minute>\d+)M)?' \
-            '((?P<second>\d*(?:\.\d*)?)S)?)?%(e)s' % \
+            '((?P<hour>\\d+)H)?' \
+            '((?P<minute>\\d+)M)?' \
+            '((?P<second>\\d*(?:\\.\\d*)?)S)?)?%(e)s' % \
             __allres
 
         timeDuration = duration

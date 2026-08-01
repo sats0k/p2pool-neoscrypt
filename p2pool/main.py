@@ -19,7 +19,8 @@ from twisted.web import server
 from twisted.python import log
 from nattraverso import portmapper, ipdiscover
 
-from . import bitcoin.p2p as bitcoin_p2p, bitcoin.data as bitcoin_data
+from .bitcoin import p2p as bitcoin_p2p
+from .bitcoin import data as bitcoin_data
 from .bitcoin import stratum, worker_interface, helper
 from .util import fixargparse, jsonrpc, variable, deferral, math, logging, switchprotocol
 from . import networks, web, work
