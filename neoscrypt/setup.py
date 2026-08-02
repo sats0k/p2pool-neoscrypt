@@ -1,8 +1,12 @@
-from distutils.core import setup, Extension
+from setuptools import setup, Extension
 
 neoscrypt_module = Extension('neoscrypt',
                                sources = ['neoscryptmodule.c',
                                           'neoscrypt.c'],
+                               extra_compile_args=[
+                                   "-O2",
+                                   "-fno-strict-aliasing",
+                               ],
                                include_dirs=['.'])
 
 setup (name = 'neoscrypt',
