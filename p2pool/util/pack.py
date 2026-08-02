@@ -58,7 +58,7 @@ class Type(object):
             res.append(f[1])
             f = f[0]
         res.reverse()
-        return ''.join(res)
+        return b''.join(res)
     
     
     def unpack(self, data, ignore_trailing=False):
@@ -204,7 +204,7 @@ class IntType(Type):
         if bits in [8, 16, 32, 64]:
             return StructType(('<' if endianness == 'little' else '>') + {8: 'B', 16: 'H', 32: 'I', 64: 'Q'}[bits])
         else:
-            return Type.__new__(cls, bits, endianness)
+            return object.__new__(cls)
     
     def __init__(self, bits, endianness='little'):
         assert bits % 8 == 0

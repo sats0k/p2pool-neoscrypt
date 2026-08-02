@@ -72,7 +72,7 @@ def load_share(share, net, peer_addr):
         raise ValueError('unknown share type: %r' % (share['type'],))
 
 # PtoPXC8MmB5VwfHFNhVTynATLSHLzq5MgF
-DONATION_SCRIPT = '410494803BA564D117067A62408A1D85BCE6B559BE5CC30264CFD266B3196E045DAD09D2CDCBA09A752B6A78B74EC068BDB78C78BD13752639961FC839E9446D3AE8AC'.decode('hex')
+DONATION_SCRIPT = bytes.fromhex('410494803BA564D117067A62408A1D85BCE6B559BE5CC30264CFD266B3196E045DAD09D2CDCBA09A752B6A78B74EC068BDB78C78BD13752639961FC839E9446D3AE8AC')
 
 class Share(object):
     VERSION = 13
@@ -128,7 +128,7 @@ class Share(object):
         ('share_info', share_info_type),
     ])
     
-    gentx_before_refhash = pack.VarStrType().pack(DONATION_SCRIPT) + pack.IntType(64).pack(0) + pack.VarStrType().pack('\x6a\x28' + pack.IntType(256).pack(0) + pack.IntType(64).pack(0))[:3]
+    gentx_before_refhash = pack.VarStrType().pack(DONATION_SCRIPT) + pack.IntType(64).pack(0) + pack.VarStrType().pack(b'\x6a\x28' + pack.IntType(256).pack(0) + pack.IntType(64).pack(0))[:3]
     
     @classmethod
     def generate_transaction(cls, tracker, share_data, block_target, desired_timestamp, desired_target, ref_merkle_link, desired_other_transaction_hashes_and_fees, net, known_txs=None, last_txout_nonce=0, base_subsidy=None):

@@ -53,7 +53,14 @@ def main(args, net, datadir_path, merged_urls, worker_endpoint):
         # connect to daemon over JSON-RPC and do initial getmemorypool
         url = '%s://%s:%i/' % ('https' if args.daemon_rpc_ssl else 'http', args.daemon_address, args.daemon_rpc_port)
         print('''Testing daemon RPC connection to '%s' with username '%s'...''' % (url, args.daemon_rpc_username))
-        daemon = jsonrpc.HTTPProxy(url, dict(Authorization='Basic ' + base64.b64encode(args.daemon_rpc_username + ':' + args.daemon_rpc_password)), timeout=30)
+        auth = f"{args.daemon_rpc_username}:{args.daemon_rpc_password}"
+        auth = base64.b64encode(auth.encode("utf-8")).decode("ascii")
+
+        daemon = jsonrpc.HTTPProxy(
+            url,
+            {"Authorization": "Basic " + auth},
+            timeout=30,
+        )
         yield helper.check(daemon, net)
         temp_work = yield helper.getwork(daemon)
         
@@ -492,7 +499,7 @@ def run():
                 '''rpcpassword=%x\r\n'''
                 '''\r\n'''
                 '''Keep that password secret! After creating the file, restart your daemon.''' % (conf_path, random.randrange(2**128)))
-        conf = open(conf_path, 'rb').read()
+        conf = open(conf_path, 'r', encoding='utf-8').read()
         contents = {}
         for line in conf.splitlines(True):
             if '#' in line:

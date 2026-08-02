@@ -10,11 +10,9 @@ class EncodeReplacerPipe(object):
         self.inner_file = inner_file
         self.softspace = 0
     def write(self, data):
-        if isinstance(data, str):
-            try:
-                data = data.encode(self.inner_file.encoding, 'replace')
-            except:
-                data = data.encode('ascii', 'replace')
+        if isinstance(data, bytes):
+            encoding = getattr(self.inner_file, 'encoding', None) or 'utf-8'
+            data = data.decode(encoding, 'replace')
         self.inner_file.write(data)
     def flush(self):
         self.inner_file.flush()
@@ -34,7 +32,7 @@ class LogFile(object):
         if length > 100*1000*1000:
             f.seek(-1000*1000, os.SEEK_END)
             while True:
-                if f.read(1) in ('', '\n'):
+                if f.read(1) in (b'', b'\n'):
                     break
             data = f.read()
             f.close()
@@ -63,6 +61,9 @@ class TimestampingPipe(object):
         self.buf = ''
         self.softspace = 0
     def write(self, data):
+        if isinstance(data, bytes):
+            data = data.decode('utf-8', 'replace')
+
         buf = self.buf + data
         lines = buf.split('\n')
         for line in lines[:-1]:
@@ -93,6 +94,9 @@ class PrefixPipe(object):
         self.buf = ''
         self.softspace = 0
     def write(self, data):
+        if isinstance(data, bytes):
+            data = data.decode('utf-8', 'replace')
+
         buf = self.buf + data
         lines = buf.split('\n')
         for line in lines[:-1]:

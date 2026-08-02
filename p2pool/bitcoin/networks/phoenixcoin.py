@@ -6,7 +6,7 @@ from twisted.internet import defer
 from .. import data, helper
 from p2pool.util import pack
 
-P2P_PREFIX = 'FED0D8C3'.decode('hex')
+P2P_PREFIX = bytes.fromhex('FED0D8C3')
 P2P_PORT = 9555
 ADDRESS_VERSION = 56
 RPC_PORT = 9554

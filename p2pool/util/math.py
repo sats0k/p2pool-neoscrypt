@@ -201,7 +201,7 @@ def natural_to_string(n, alphabet=None):
             n, x = divmod(n, len(alphabet))
             res.append(alphabet[x])
         res.reverse()
-        return ''.join(res)
+        return b''.join(res)
 
 def string_to_natural(s, alphabet=None):
     if alphabet is None:

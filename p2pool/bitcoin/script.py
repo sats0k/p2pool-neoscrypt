@@ -77,4 +77,4 @@ def create_push_script(datums): # datums can be ints or strs
         else:
             raise ValueError('string too long')
         res.append(datum)
-    return ''.join(res)
+    return b''.join(res)
