@@ -64,22 +64,22 @@ class DataView(object):
         bins, last_bin_end = _shift_bins_so_t_is_not_past_end(self.bins, self.last_bin_end, self.desc.bin_width, t)
         assert last_bin_end - self.desc.bin_width <= t <= last_bin_end
         
-        def _(xxx_todo_changeme):
-            (i, bin) = xxx_todo_changeme
+        def _(item):
+            (i, bucket) = item
             left, right = last_bin_end - self.desc.bin_width*(i + 1), min(t, last_bin_end - self.desc.bin_width*i)
             center, width = (left+right)/2, right-left
             if self.ds_desc.is_gauge and self.ds_desc.multivalue_undefined_means_0:
-                real_count = max([0] + [count for total, count in bin.values()])
+                real_count = max([0] + [count for total, count in bucket.values()])
                 if real_count == 0:
                     val = None
                 else:
-                    val = dict((k, total/real_count) for k, (total, count) in bin.items())
+                    val = dict((k, total/real_count) for k, (total, count) in bucket.items())
                 default = 0
             elif self.ds_desc.is_gauge and not self.ds_desc.multivalue_undefined_means_0:
-                val = dict((k, total/count) for k, (total, count) in bin.items())
+                val = dict((k, total/count) for k, (total, count) in bucket.items())
                 default = None
             else:
-                val = dict((k, total/width) for k, (total, count) in bin.items())
+                val = dict((k, total/width) for k, (total, count) in bucket.items())
                 default = 0
             if not self.ds_desc.multivalues:
                 val = None if val is None else val.get('null', default)

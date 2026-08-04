@@ -664,8 +664,8 @@ class Node(object):
         print('Lost peer %s:%i - %s' % (conn.addr[0], conn.addr[1], reason.getErrorMessage()))
     
     
-    def got_addr(self, xxx_todo_changeme, services, timestamp):
-        (host, port) = xxx_todo_changeme
+    def got_addr(self, address, services, timestamp):
+        (host, port) = address
         if (host, port) in self.addr_store:
             old_services, old_first_seen, old_last_seen = self.addr_store[host, port]
             self.addr_store[host, port] = services, old_first_seen, max(old_last_seen, timestamp)

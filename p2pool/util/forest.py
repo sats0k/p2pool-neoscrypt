@@ -22,28 +22,28 @@ class DistanceSkipList(TrackerSkipList):
     def get_delta(self, element):
         return element, 1, self.previous(element)
     
-    def combine_deltas(self, xxx_todo_changeme, xxx_todo_changeme1):
-        (from_hash1, dist1, to_hash1) = xxx_todo_changeme
-        (from_hash2, dist2, to_hash2) = xxx_todo_changeme1
+    def combine_deltas(self, delta1, delta2):
+        (from_hash1, dist1, to_hash1) = delta1
+        (from_hash2, dist2, to_hash2) = delta2
         if to_hash1 != from_hash2:
             raise AssertionError()
         return from_hash1, dist1 + dist2, to_hash2
     
-    def initial_solution(self, start, xxx_todo_changeme2):
-        (n,) = xxx_todo_changeme2
+    def initial_solution(self, start, solution):
+        (n,) = solution
         return 0, start
     
-    def apply_delta(self, xxx_todo_changeme3, xxx_todo_changeme4, xxx_todo_changeme5):
-        (dist1, to_hash1) = xxx_todo_changeme3
-        (from_hash2, dist2, to_hash2) = xxx_todo_changeme4
-        (n,) = xxx_todo_changeme5
+    def apply_delta(self, delta1, delta2, params):
+        (dist1, to_hash1) = delta1
+        (from_hash2, dist2, to_hash2) = delta2
+        (n,) = params
         if to_hash1 != from_hash2:
             raise AssertionError()
         return dist1 + dist2, to_hash2
     
-    def judge(self, xxx_todo_changeme6, xxx_todo_changeme7):
-        (dist, hash) = xxx_todo_changeme6
-        (n,) = xxx_todo_changeme7
+    def judge(self,  state, params):
+        (dist, hash) = state
+        (n,) = params
         if dist > n:
             return 1
         elif dist == n:
@@ -51,9 +51,9 @@ class DistanceSkipList(TrackerSkipList):
         else:
             return -1
     
-    def finalize(self, xxx_todo_changeme8, xxx_todo_changeme9):
-        (dist, hash) = xxx_todo_changeme8
-        (n,) = xxx_todo_changeme9
+    def finalize(self, state, params):
+        (dist, hash) = state
+        (n,) = params
         assert dist == n
         return hash
 
