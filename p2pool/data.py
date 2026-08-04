@@ -30,7 +30,7 @@ def deserialize_bignum(str_, len_):
 def parse_bip0034(coinbase):
     _, opdata = next(script.parse(coinbase))
     bignum = deserialize_bignum(opdata, len(opdata))
-    if ord(opdata[-1]) & 0x80:
+    if opdata[-1] & 0x80:
         bignum = -bignum
     return (bignum,)
 
@@ -220,7 +220,7 @@ class Share(object):
             )],
             tx_outs=[dict(value=amounts[script], script=script) for script in dests if amounts[script] or script == DONATION_SCRIPT] + [dict(
                 value=0,
-                script='\x6a\x28' + cls.get_ref_hash(net, share_info, ref_merkle_link) + pack.IntType(64).pack(last_txout_nonce),
+                script=b'\x6a\x28' + cls.get_ref_hash(net, share_info, ref_merkle_link) + pack.IntType(64).pack(last_txout_nonce),
             )],
             lock_time=0,
         )
@@ -291,13 +291,14 @@ class Share(object):
         )
         merkle_root = bitcoin_data.check_merkle_link(self.gentx_hash, self.merkle_link)
         self.header = dict(self.min_header, merkle_root=merkle_root)
-        self.pow_hash = net.PARENT.POW_FUNC(bitcoin_data.block_header_type.pack(self.header))
+        header_bytes = bitcoin_data.block_header_type.pack(self.header)
+        self.pow_hash = net.PARENT.POW_FUNC(header_bytes)
         self.hash = self.header_hash = bitcoin_data.hash256(bitcoin_data.block_header_type.pack(self.header))
         
         if self.target > net.MAX_TARGET:
             from p2pool import p2p
             raise p2p.PeerMisbehavingError('share target invalid')
-        
+
         if self.pow_hash > self.target:
             from p2pool import p2p
             raise p2p.PeerMisbehavingError('share PoW invalid')
@@ -559,7 +560,7 @@ class OkayTracker(forest.Tracker):
             timestamp_cutoff = min(int(time.time()), best_share.timestamp) - 3600
             target_cutoff = int(2**256//(self.net.SHARE_PERIOD*best_tail_score[1] + 1) * 2 + .5) if best_tail_score[1] is not None else 2**256-1
         else:
-            timestamp_cutoff = int(time.time()) - 24*60*60
+            timestamp_cutoff = 0
             target_cutoff = 2**256-1
         
         if p2pool.DEBUG:
@@ -584,7 +585,8 @@ class OkayTracker(forest.Tracker):
         return self.net.CHAIN_LENGTH, self.verified.get_delta(share_hash, end_point).work/((0 - block_height + 1)*self.net.PARENT.BLOCK_PERIOD)
 
 def get_pool_attempts_per_second(tracker, previous_share_hash, dist, min_work=False, integer=False):
-    assert dist >= 2
+    if dist < 2:
+        return 0
     near = tracker.items[previous_share_hash]
     far = tracker.items[tracker.get_nth_parent_hash(previous_share_hash, dist - 1)]
     attempts = tracker.get_delta(near.hash, far.hash).work if not min_work else tracker.get_delta(near.hash, far.hash).min_work
@@ -673,7 +675,7 @@ class ShareStore(object):
         filenames, next = self.get_filenames_and_next()
         for filename in filenames:
             share_hashes, verified_hashes = known.setdefault(filename, (set(), set()))
-            with open(filename, 'rb') as f:
+            with open(filename, 'r', encoding='ascii') as f:
                 for line in f:
                     try:
                         type_id_str, data_hex = line.strip().split(' ')
@@ -687,7 +689,7 @@ class ShareStore(object):
                             verified_hash_cb(verified_hash)
                             verified_hashes.add(verified_hash)
                         elif type_id == 5:
-                            raw_share = share_type.unpack(data_hex.decode('hex'))
+                            raw_share = share_type.unpack(bytes.fromhex(data_hex))
                             if raw_share['type'] < Share.VERSION:
                                 continue
                             share = load_share(raw_share, self.net, None)
@@ -709,7 +711,7 @@ class ShareStore(object):
             filename = next
         
         with open(filename, 'ab') as f:
-            f.write(line + '\n')
+            f.write((line + '\n').encode('ascii'))
         
         return filename
     
@@ -718,7 +720,7 @@ class ShareStore(object):
             if share.hash in share_hashes:
                 break
         else:
-            filename = self._add_line("%i %s" % (5, share_type.pack(share.as_share()).encode('hex')))
+            filename = self._add_line("%i %s" % (5, share_type.pack(share.as_share()).hex()))
             share_hashes, verified_hashes = self.known.setdefault(filename, (set(), set()))
             share_hashes.add(share.hash)
         share_hashes, verified_hashes = self.known_desired.setdefault(filename, (set(), set()))
@@ -762,3 +764,4 @@ class ShareStore(object):
             self.known_desired.pop(filename)
             os.remove(filename)
             print("REMOVED", filename)
+

@@ -16,13 +16,26 @@ ident = "$Id$"
 
 import sys, types, http.client, urllib.request, urllib.parse, urllib.error, socket, weakref
 from os.path import isfile
-from string import join, strip, split
-from UserDict import UserDict
+def join(seq, sep=' '):
+    return sep.join(seq)
+
+def strip(s):
+    return s.strip()
+
+def split(s, sep=None):
+    return s.split(sep)
+try:
+    from UserDict import UserDict
+except ImportError:
+    from collections import UserDict
 from io import StringIO
 from .TimeoutSocket import TimeoutSocket, TimeoutError
 from urllib.parse import urlparse
 from http.client import HTTPConnection, HTTPSConnection
-from exceptions import Exception
+try:
+    from exceptions import Exception
+except ImportError:
+    from builtins import Exception
 try:
     from ZSI import _get_idstr
 except:
@@ -73,7 +86,11 @@ except:
 # python2.3 urllib.basejoin does not remove current directory ./
 # from path and this causes problems on subsequent basejoins.
 #
-basejoin = urllib.basejoin
+try:
+    basejoin = urllib.basejoin
+except AttributeError:
+    from urllib.parse import urljoin
+    basejoin = urljoin
 if sys.version_info[0:2] < (2, 4, 0, 'final', 0)[0:2]:
     #basejoin = lambda base,url: urllib.basejoin(base,url.lstrip('./'))
     token = './'

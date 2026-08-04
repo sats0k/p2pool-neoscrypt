@@ -38,7 +38,7 @@ def getwork(daemon, use_getblocktemplate=False):
         except jsonrpc.Error_for_code(-32601): # Method not found
             print('Error: Daemon version too old!', file=sys.stderr)
             raise deferral.RetrySilentlyException()
-    packed_transactions = [(x['data'] if isinstance(x, dict) else x).decode('hex') for x in work['transactions']]
+    packed_transactions = [bytes.fromhex(x['data'] if isinstance(x, dict) else x) for x in work['transactions']]
     if 'height' not in work:
         work['height'] = (yield daemon.rpc_getblock(work['previousblockhash']))['height'] + 1
     elif p2pool.DEBUG:
@@ -51,8 +51,8 @@ def getwork(daemon, use_getblocktemplate=False):
         transaction_fees=[x.get('fee', None) if isinstance(x, dict) else None for x in work['transactions']],
         subsidy=work['coinbasevalue'],
         time=work['time'] if 'time' in work else work['curtime'],
-        bits=bitcoin_data.FloatingIntegerType().unpack(work['bits'].decode('hex')[::-1]) if isinstance(work['bits'], str) else bitcoin_data.FloatingInteger(work['bits']),
-        coinbaseflags=work['coinbaseflags'].decode('hex') if 'coinbaseflags' in work else ''.join(x.decode('hex') for x in work['coinbaseaux'].values()) if 'coinbaseaux' in work else '',
+        bits=bitcoin_data.FloatingIntegerType().unpack(bytes.fromhex(work['bits'])[::-1]) if isinstance(work['bits'], str) else bitcoin_data.FloatingInteger(work['bits']),
+        coinbaseflags=bytes.fromhex(work['coinbaseflags']) if 'coinbaseflags' in work else b''.join(bytes.fromhex(x) for x in work['coinbaseaux'].values()) if 'coinbaseaux' in work else '',
         height=work['height'],
         last_update=time.time(),
         use_getblocktemplate=use_getblocktemplate,
@@ -71,12 +71,12 @@ def submit_block_p2p(block, factory, net):
 def submit_block_rpc(block, ignore_failure, daemon, daemon_work, net):
     if daemon_work.value['use_getblocktemplate']:
         try:
-            result = yield daemon.rpc_submitblock(bitcoin_data.block_type.pack(block).encode('hex'))
+            result = yield daemon.rpc_submitblock(bitcoin_data.block_type.pack(block).hex())
         except jsonrpc.Error_for_code(-32601): # Method not found, for older litecoin versions
-            result = yield daemon.rpc_getblocktemplate(dict(mode='submit', data=bitcoin_data.block_type.pack(block).encode('hex')))
+            result = yield daemon.rpc_getblocktemplate(dict(mode='submit', data=bitcoin_data.block_type.pack(block).hex()))
         success = result is None
     else:
-        result = yield daemon.rpc_getmemorypool(bitcoin_data.block_type.pack(block).encode('hex'))
+        result = yield daemon.rpc_getmemorypool(bitcoin_data.block_type.pack(block).hex())
         success = result
     success_expected = net.PARENT.POW_FUNC(bitcoin_data.block_header_type.pack(block['header'])) <= block['header']['bits'].target
     if (not success and success_expected and not ignore_failure) or (success and not success_expected):
@@ -94,3 +94,4 @@ def check_genesis_block(daemon, genesis_block_hash):
         defer.returnValue(False)
     else:
         defer.returnValue(True)
+

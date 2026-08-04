@@ -407,9 +407,9 @@ class UPnPProtocol(DatagramProtocol, object):
         # joined multicast group, starting upnp search
         self.mcast.joinGroup('239.255.255.250', socket.INADDR_ANY)
         
-        self.transport.write(_UPNP_SEARCH_REQUEST, (_UPNP_MCAST, _UPNP_PORT))
-        self.transport.write(_UPNP_SEARCH_REQUEST, (_UPNP_MCAST, _UPNP_PORT))
-        self.transport.write(_UPNP_SEARCH_REQUEST, (_UPNP_MCAST, _UPNP_PORT))
+        self.transport.write(_UPNP_SEARCH_REQUEST.encode('ascii'), (_UPNP_MCAST, _UPNP_PORT))
+        self.transport.write(_UPNP_SEARCH_REQUEST.encode('ascii'), (_UPNP_MCAST, _UPNP_PORT))
+        self.transport.write(_UPNP_SEARCH_REQUEST.encode('ascii'), (_UPNP_MCAST, _UPNP_PORT))
         
         return self._discovery
     
@@ -423,12 +423,12 @@ class UPnPProtocol(DatagramProtocol, object):
         logging.debug("Got UPNP multicast search answer:\n%s", dgram)
         
         #This is an HTTP response
-        response, message = dgram.split('\r\n', 1)
+        response, message = dgram.split(b'\r\n', 1)
         
         # Prepare status line
         version, status, textstatus = response.split(None, 2)
         
-        if not version.startswith('HTTP'):
+        if not version.startswith(b'HTTP'):
             return
         if status != "200":
             return

@@ -73,7 +73,7 @@ class WorkerBridge(worker_interface.WorkerBridge):
                 auxblock = yield deferral.retry('Error while calling merged getauxblock on %s:' % (merged_url,), 30)(merged_proxy.rpc_getauxblock)()
                 self.merged_work.set(math.merge_dicts(self.merged_work.value, {auxblock['chainid']: dict(
                     hash=int(auxblock['hash'], 16),
-                    target='p2pool' if auxblock['target'] == 'p2pool' else pack.IntType(256).unpack(auxblock['target'].decode('hex')),
+                    target='p2pool' if auxblock['target'] == 'p2pool' else pack.IntType(256).unpack(bytes.fromhex(auxblock['target'])),
                     merged_proxy=merged_proxy,
                 )}))
                 yield deferral.sleep(1)
@@ -97,7 +97,7 @@ class WorkerBridge(worker_interface.WorkerBridge):
                     version=bb['version'],
                     previous_block=bitcoin_data.hash256(bitcoin_data.block_header_type.pack(bb)),
                     bits=bb['bits'], # not always true
-                    coinbaseflags='',
+                    coinbaseflags=b'',
                     height=t['height'] + 1,
                     time=bb['timestamp'] + self.node.net.PARENT.BLOCK_PERIOD, # better way? was 600
                     transactions=[],
@@ -140,6 +140,9 @@ class WorkerBridge(worker_interface.WorkerBridge):
         return (my_shares_not_in_chain - my_doa_shares_not_in_chain, my_doa_shares_not_in_chain), my_shares, (orphans_recorded_in_chain, doas_recorded_in_chain)
     
     def get_user_details(self, username):
+        if isinstance(username, bytes):
+            username = username.decode('utf-8', errors='replace')
+
         contents = re.split('([+/])', username)
         assert len(contents) % 2 == 1
         
@@ -224,14 +227,14 @@ class WorkerBridge(worker_interface.WorkerBridge):
         if self.merged_work.value:
             tree, size = bitcoin_data.make_auxpow_tree(self.merged_work.value)
             mm_hashes = [self.merged_work.value.get(tree.get(i), dict(hash=0))['hash'] for i in range(size)]
-            mm_data = '\xfa\xbemm' + bitcoin_data.aux_pow_coinbase_type.pack(dict(
+            mm_data = b'\xfa\xbemm' + bitcoin_data.aux_pow_coinbase_type.pack(dict(
                 merkle_root=bitcoin_data.merkle_hash(mm_hashes),
                 size=size,
                 nonce=0,
             ))
             mm_later = [(aux_work, mm_hashes.index(aux_work['hash']), mm_hashes) for chain_id, aux_work in self.merged_work.value.items()]
         else:
-            mm_data = ''
+            mm_data = b''
             mm_later = []
         
         tx_hashes = [bitcoin_data.hash256(bitcoin_data.tx_type.pack(tx)) for tx in self.current_work.value['transactions']]
@@ -411,7 +414,7 @@ class WorkerBridge(worker_interface.WorkerBridge):
                 try:
                     if pow_hash <= aux_work['target'] or p2pool.DEBUG:
                         df = deferral.retry('Error submitting merged block: (will retry)', 10, 10)(aux_work['merged_proxy'].rpc_getauxblock)(
-                            pack.IntType(256, 'big').pack(aux_work['hash']).encode('hex'),
+                            pack.IntType(256, 'big').pack(aux_work['hash']).hex(),
                             bitcoin_data.aux_pow_type.pack(dict(
                                 merkle_tx=dict(
                                     tx=new_gentx,
@@ -420,7 +423,7 @@ class WorkerBridge(worker_interface.WorkerBridge):
                                 ),
                                 merkle_link=bitcoin_data.calculate_merkle_link(hashes, index),
                                 parent_block_header=header,
-                            )).encode('hex'),
+                            )).hex(),
                         )
                         @df.addCallback
                         def _(result, aux_work=aux_work):

@@ -3,7 +3,7 @@ import collections
 class StringBuffer(object):
     'Buffer manager with great worst-case behavior'
     
-    def __init__(self, data=''):
+    def __init__(self, data=b''):
         self.buf = collections.deque([data])
         self.buf_len = len(data)
         self.pos = 0
@@ -29,7 +29,7 @@ class StringBuffer(object):
             
             data.append(seg)
             wants -= len(seg)
-        return ''.join(data)
+        return b''.join(data)
 
 def _DataChunker(receiver):
     wants = next(receiver)

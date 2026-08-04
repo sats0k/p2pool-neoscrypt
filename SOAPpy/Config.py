@@ -50,8 +50,10 @@ class SOAPConfig:
     __readonly = ('SSLserver', 'SSLclient', 'GSIserver', 'GSIclient')
     class SSLconfig:
         __slots__ = ('key_file', 'cert_file')
-        key_file = None
-        cert_file = None
+
+        def __init__(self):
+            key_file = None
+            cert_file = None
 
     def __init__(self, config = None, **kw):
         d = self.__dict__

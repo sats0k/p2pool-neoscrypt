@@ -58,7 +58,7 @@ class Protocol(p2protocol.Protocol):
                 port=self.transport.getHost().port,
             ),
             nonce=self.node.nonce,
-            sub_version=p2pool.__version__,
+            sub_version=p2pool.__version__.encode('ascii'),
             mode=1,
             best_share_hash=self.node.best_share_hash_func(),
         )
@@ -90,7 +90,7 @@ class Protocol(p2protocol.Protocol):
                 raise PeerMisbehavingError('first message was not version message')
             p2protocol.Protocol.packetReceived(self, command, payload2)
         except PeerMisbehavingError as e:
-            print('Peer %s:%i misbehaving, will drop and ban. Reason:' % self.addr, e.message)
+            print('Peer %s:%i misbehaving, will drop and ban. Reason:' % self.addr, str(e))
             self.badPeerHappened()
     
     def badPeerHappened(self):
@@ -642,7 +642,17 @@ class Node(object):
             raise ValueError('already have peer')
         self.peers[conn.nonce] = conn
         
-        print('%s connection to peer %s:%i established. p2pool version: %i %r' % ('Incoming' if conn.incoming else 'Outgoing', conn.addr[0], conn.addr[1], conn.other_version, conn.other_sub_version))
+        sub_version = conn.other_sub_version
+        if isinstance(sub_version, bytes):
+            sub_version = sub_version.decode('utf-8', errors='replace')
+
+        print('%s connection to peer %s:%i established. p2pool version: %i %s' % (
+            'Incoming' if conn.incoming else 'Outgoing',
+            conn.addr[0],
+            conn.addr[1],
+            conn.other_version,
+            sub_version,
+        ))
     
     def lost_conn(self, conn, reason):
         if conn.nonce not in self.peers:

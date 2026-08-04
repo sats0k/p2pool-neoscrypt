@@ -28,11 +28,11 @@ class Protocol(protocol.Protocol):
     
     def dataReceiver(self):
         while True:
-            start = ''
+            start = b''
             while start != self._message_prefix:
                 start = (start + (yield 1))[-len(self._message_prefix):]
             
-            command = (yield 12).rstrip('\0')
+            command = (yield 12).rstrip(b'\0').decode('ascii')
             length, = struct.unpack('<I', (yield 4))
             if length > self._max_payload_length:
                 print('length too large')
@@ -41,9 +41,7 @@ class Protocol(protocol.Protocol):
             payload = yield length
             
             if hashlib.sha256(hashlib.sha256(payload).digest()).digest()[:4] != checksum:
-                print('invalid hash for', self.transport.getPeer().host, repr(command), length, checksum.encode('hex'))
-                if p2pool.DEBUG:
-                    print(hashlib.sha256(hashlib.sha256(payload).digest()).digest()[:4].encode('hex'), payload.encode('hex'))
+                print('invalid hash for', self.transport.getPeer().host, repr(command), length, checksum.hex())
                 self.badPeerHappened()
                 continue
             
@@ -56,7 +54,7 @@ class Protocol(protocol.Protocol):
             try:
                 self.packetReceived(command, type_.unpack(payload, self.ignore_trailing_payload))
             except:
-                print('RECV', command, payload[:100].encode('hex') + ('...' if len(payload) > 100 else ''))
+                print('RECV', command, payload[:100].hex() + ('...' if len(payload) > 100 else ''))
                 log.err(None, 'Error handling message: (see RECV line)')
                 self.disconnect()
     
@@ -91,7 +89,12 @@ class Protocol(protocol.Protocol):
         payload = type_.pack(payload2)
         if len(payload) > self._max_payload_length:
             raise TooLong('payload too long')
-        data = self._message_prefix + struct.pack('<12sI', command, len(payload)) + hashlib.sha256(hashlib.sha256(payload).digest()).digest()[:4] + payload
+        data = (
+            self._message_prefix +
+            struct.pack('<12sI', command.encode('ascii'), len(payload)) +
+            hashlib.sha256(hashlib.sha256(payload).digest()).digest()[:4] +
+            payload
+        )
         self.traffic_happened.happened('p2p/out', len(data))
         self.transport.write(data)
     

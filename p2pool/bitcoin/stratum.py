@@ -8,7 +8,7 @@ from p2pool.bitcoin import data as bitcoin_data, getwork
 from p2pool.util import expiring_dict, jsonrpc, pack
 def asctohex(s):
     empty = '' # I use this construct because I find ''.join() too dense
-    return empty.join(['%02x' % ord(c) for c in s]) # the %02 pads when needed
+    return empty.join(['%02x' % c for c in s]) # the %02 pads when needed
 
 class StratumRPCMiningProvider(object):
     def __init__(self, wb, other, transport):
@@ -55,14 +55,14 @@ class StratumRPCMiningProvider(object):
         # this is send to the miner in the stratum message
         self.other.svc_mining.rpc_notify(
             jobid, # jobid
-            getwork._swap4(pack.IntType(256).pack(x['previous_block']),True).encode('hex'), # prevhash
-            x['coinb1'].encode('hex'), # coinb1
-            x['coinb2'].encode('hex'), # coinb2
-            [pack.IntType(256).pack(s).encode('hex') for s in x['merkle_link']['branch']], # merkle_branch
-            getwork._swap4(pack.IntType(32).pack(x['version']),True).encode('hex'), # version
-            getwork._swap4(pack.IntType(32).pack(x['bits'].bits),True).encode('hex'), # nbits
+            getwork._swap4(pack.IntType(256).pack(x['previous_block']),True).hex(), # prevhash
+            x['coinb1'].hex(), # coinb1
+            x['coinb2'].hex(), # coinb2
+            [pack.IntType(256).pack(s).hex() for s in x['merkle_link']['branch']], # merkle_branch
+            getwork._swap4(pack.IntType(32).pack(x['version']),True).hex(), # version
+            getwork._swap4(pack.IntType(32).pack(x['bits'].bits),True).hex(), # nbits
            #  pack.IntType(32).pack(x['bits'].bits).encode('hex'), # nbits
-            getwork._swap4(pack.IntType(32).pack(x['timestamp']),True).encode('hex'), # ntime
+            getwork._swap4(pack.IntType(32).pack(x['timestamp']),True).hex(), # ntime
             True, # clean_jobs
         ).addErrback(lambda err: None)
 	
@@ -75,7 +75,7 @@ class StratumRPCMiningProvider(object):
             return False
         x, got_response = self.handler_map[job_id]
         
-        coinb_nonce = getwork._swap4(extranonce2.decode('hex'))       
+        coinb_nonce = getwork._swap4(bytes.fromhex(extranonce2))       
         assert len(coinb_nonce) == self.wb.COINBASE_NONCE_LENGTH
         new_packed_gentx = x['coinb1'] + coinb_nonce + x['coinb2']
         
@@ -84,9 +84,9 @@ class StratumRPCMiningProvider(object):
             version=x['version'],
             previous_block=x['previous_block'],
             merkle_root=bitcoin_data.check_merkle_link(bitcoin_data.hash256(new_packed_gentx), x['merkle_link']),
-            timestamp=pack.IntType(32).unpack(getwork._swap4(ntime.decode('hex'),True)),
+            timestamp=pack.IntType(32).unpack(getwork._swap4(bytes.fromhex(ntime),True)),
             bits=x['bits'],
-            nonce=pack.IntType(32).unpack(getwork._swap4(nonce.decode('hex'),True)),
+            nonce=pack.IntType(32).unpack(getwork._swap4(bytes.fromhex(nonce),True)),
 
         )
 	
@@ -114,3 +114,4 @@ class StratumServerFactory(protocol.ServerFactory):
     
     def __init__(self, wb):
         self.wb = wb
+

@@ -56,10 +56,11 @@ except:
         BASE = "http://www.w3.org/2000/xmlns/"
         XML = "http://www.w3.org/XML/1998/namespace"
 try:
-    import io
-    StringIO = cStringIO
+    import cStringIO
+    StringIO = cStringIO.StringIO
 except ImportError:
-    import io
+    from io import BytesIO
+    StringIO = BytesIO
 
 _attrs = lambda E: (E.attributes and list(E.attributes.values())) or []
 _children = lambda E: E.childNodes or []

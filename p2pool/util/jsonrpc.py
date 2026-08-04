@@ -7,6 +7,11 @@ from twisted.internet import defer
 from twisted.protocols import basic
 from twisted.python import failure, log
 from twisted.web import client, error
+from twisted.web.client import Agent, readBody
+from twisted.web.http_headers import Headers
+from twisted.web.iweb import IPolicyForHTTPS
+from twisted.internet import reactor
+from twisted.web.client import BrowserLikePolicyForHTTPS
 
 from p2pool.util import deferral, deferred_resource, memoize
 
@@ -103,36 +108,84 @@ def _handle(data, provider, preargs=(), response_handler=None):
 
 # HTTP
 
+def json_bytes_to_str(obj):
+    if isinstance(obj, bytes):
+        return obj.decode('utf-8')
+    elif isinstance(obj, dict):
+        return {json_bytes_to_str(k): json_bytes_to_str(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [json_bytes_to_str(x) for x in obj]
+    elif isinstance(obj, tuple):
+        return tuple(json_bytes_to_str(x) for x in obj)
+    return obj
+
 @defer.inlineCallbacks
 def _http_do(url, headers, timeout, method, params):
     id_ = 0
-    
-    try:
-        data = yield client.getPage(
-            url=url,
-            method='POST',
-            headers=dict(headers, **{'Content-Type': 'application/json'}),
-            postdata=json.dumps({
-                'jsonrpc': '2.0',
-                'method': method,
-                'params': params,
-                'id': id_,
-            }),
-            timeout=timeout,
+
+    body = json.dumps({
+        "jsonrpc": "2.0",
+        "method": json_bytes_to_str(method),
+        "params": json_bytes_to_str(params),
+        "id": id_,
+    }).encode("utf-8")
+
+    agent = Agent(
+        reactor,
+        contextFactory=BrowserLikePolicyForHTTPS()
+    )
+
+    hdrs = dict(headers)
+    hdrs["Content-Type"] = "application/json"
+
+    twisted_headers = Headers({
+        k: [v] if isinstance(v, str) else v
+        for k, v in hdrs.items()
+    })
+
+    class StringProducer(object):
+        def __init__(self, body):
+            self.body = body
+            self.length = len(body)
+
+        def startProducing(self, consumer):
+            consumer.write(self.body)
+            return defer.succeed(None)
+
+        def pauseProducing(self):
+            pass
+
+        def stopProducing(self):
+            pass
+
+    from zope.interface import implementer
+    from twisted.web.iweb import IBodyProducer
+
+    @implementer(IBodyProducer)
+    class BodyProducer(StringProducer):
+        pass
+
+    response = yield agent.request(
+        b"POST",
+        url.encode("ascii"),
+        twisted_headers,
+        BodyProducer(body),
+    )
+
+    data = yield readBody(response)
+    resp = json.loads(data.decode("utf-8"))
+
+    if resp["id"] != id_:
+        raise ValueError("invalid id")
+
+    if resp.get("error") is not None:
+        err = resp["error"]
+        raise Error_for_code(err["code"])(
+            err["message"],
+            err.get("data"),
         )
-    except error.Error as e:
-        try:
-            resp = json.loads(e.response)
-        except:
-            raise e
-    else:
-        resp = json.loads(data)
-    
-    if resp['id'] != id_:
-        raise ValueError('invalid id')
-    if 'error' in resp and resp['error'] is not None:
-        raise Error_for_code(resp['error']['code'])(resp['error']['message'], resp['error'].get('data', None))
-    defer.returnValue(resp['result'])
+
+    defer.returnValue(resp["result"])
 HTTPProxy = lambda url, headers={}, timeout=5: Proxy(lambda method, params: _http_do(url, headers, timeout, method, params))
 
 class HTTPServer(deferred_resource.DeferredResource):
@@ -145,11 +198,11 @@ class HTTPServer(deferred_resource.DeferredResource):
         data = yield _handle(request.content.read(), self._provider, preargs=[request])
         assert data is not None
         request.setHeader('Content-Type', 'application/json')
-        request.setHeader('Content-Length', len(data))
-        request.write(data)
+        request.setHeader("Content-Length", str(len(data)))
+        request.write(data.encode("utf-8"))
 
 class LineBasedPeer(basic.LineOnlyReceiver):
-    delimiter = '\n'
+    delimiter = b'\n'
     
     def __init__(self):
         #basic.LineOnlyReceiver.__init__(self)
@@ -158,8 +211,18 @@ class LineBasedPeer(basic.LineOnlyReceiver):
             'method': method,
             'params': params,
             'id': id,
-        })))
+        }).encode('utf-8')))
         self.other = Proxy(self._matcher)
     
     def lineReceived(self, line):
-        _handle(line, self, response_handler=self._matcher.got_response).addCallback(lambda line2: self.sendLine(line2) if line2 is not None else None)
+        if isinstance(line, bytes):
+            line = line.decode('utf-8')
+
+        _handle(
+            line,
+            self,
+            response_handler=self._matcher.got_response
+        ).addCallback(
+            lambda line2: self.sendLine(line2.encode('utf-8')) if line2 is not None else None
+        )
+

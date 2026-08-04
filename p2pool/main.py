@@ -84,8 +84,8 @@ def main(args, net, datadir_path, merged_urls, worker_endpoint):
             address_path = os.path.join(datadir_path, 'cached_payout_address')
             
             if os.path.exists(address_path):
-                with open(address_path, 'rb') as f:
-                    address = f.read().strip('\r\n')
+                with open(address_path, 'r') as f:
+                    address = f.read().strip()
                 print('    Loaded cached address: %s...' % (address,))
             else:
                 address = None
@@ -100,7 +100,7 @@ def main(args, net, datadir_path, merged_urls, worker_endpoint):
                 print('    Getting payout address from daemon...')
                 address = yield deferral.retry('Error getting payout address from daemon:', 5)(lambda: daemon.rpc_getaccountaddress('p2pool'))()
             
-            with open(address_path, 'wb') as f:
+            with open(address_path, 'w') as f:
                 f.write(address)
             
             my_pubkey_hash = bitcoin_data.address_to_pubkey_hash(address, net.PARENT)
@@ -190,7 +190,7 @@ def main(args, net, datadir_path, merged_urls, worker_endpoint):
         node.p2p_node.start()
         
         def save_addrs():
-            with open(os.path.join(datadir_path, 'addrs'), 'wb') as f:
+            with open(os.path.join(datadir_path, 'addrs'), 'w') as f:
                 f.write(json.dumps(list(node.p2p_node.addr_store.items())))
         deferral.RobustLoopingCall(save_addrs).start(60)
         
@@ -233,7 +233,7 @@ def main(args, net, datadir_path, merged_urls, worker_endpoint):
         web_serverfactory = server.Site(web_root)
         
         
-        serverfactory = switchprotocol.FirstByteSwitchFactory({'{': stratum.StratumServerFactory(caching_wb)}, web_serverfactory)
+        serverfactory = switchprotocol.FirstByteSwitchFactory({ord('{'): stratum.StratumServerFactory(caching_wb)}, web_serverfactory)
         deferral.retry('Error binding to worker port:', traceback=False)(reactor.listenTCP)(worker_endpoint[1], serverfactory, interface=worker_endpoint[0])
         
         with open(os.path.join(os.path.join(datadir_path, 'ready_flag')), 'wb') as f:
@@ -592,16 +592,7 @@ def run():
                     + '\n' + eventDict['failure'].getTraceback())
             else:
                 text = " ".join([str(m) for m in eventDict["message"]]) + "\n"
-            
-            from twisted.web import client
-            client.getPage(
-                url='http://u.forre.st/p2pool_error.cgi',
-                method='POST',
-                postdata=p2pool.__version__ + ' ' + net.NAME + '\n' + text,
-                timeout=15,
-            ).addBoth(lambda x: None)
-    if not args.no_bugreport:
-        log.addObserver(ErrorReporter().emit)
     
     reactor.callWhenRunning(main, args, net, datadir_path, merged_urls, worker_endpoint)
     reactor.run()
+

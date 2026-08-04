@@ -42,7 +42,7 @@ class sha256(object):
     digest_size = 256//8
     block_size = 512//8
     
-    def __init__(self, data='', _=(initial_state, '', 0)):
+    def __init__(self, data=b'', _=(initial_state, b'', 0)):
         self.state, self.buf, self.length = _
         self.update(data)
     
@@ -64,7 +64,7 @@ class sha256(object):
     
     def digest(self):
         state = self.state
-        buf = self.buf + '\x80' + '\x00'*((self.block_size - 9 - len(self.buf)) % self.block_size) + struct.pack('>Q', self.length)
+        buf = self.buf + b'\x80' + b'\x00'*((self.block_size - 9 - len(self.buf)) % self.block_size) + struct.pack('>Q', self.length)
         
         for chunk in [buf[i:i + self.block_size] for i in range(0, len(buf), self.block_size)]:
             state = process(state, chunk)
@@ -72,4 +72,5 @@ class sha256(object):
         return state
     
     def hexdigest(self):
-        return self.digest().encode('hex')
+        return self.digest().hex()
+

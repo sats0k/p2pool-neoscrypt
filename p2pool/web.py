@@ -32,7 +32,7 @@ def _atomic_read(filename):
     return None
 
 def _atomic_write(filename, data):
-    with open(filename + '.new', 'wb') as f:
+    with open(filename + '.new', 'w') as f:
         f.write(data)
         f.flush()
         try:
@@ -89,7 +89,7 @@ def get_web_root(wb, datadir_path, daemon_getinfo_var, stop_event=variable.Event
             (bitcoin_data.script2_to_address(script, node.net.PARENT), value/1e8)
             for script, value in get_current_scaled_txouts(total, trunc).items()
             if bitcoin_data.script2_to_address(script, node.net.PARENT) is not None
-        ))
+        )).encode('utf-8')
     
     def get_global_stats():
         # averaged over last hour
@@ -187,22 +187,28 @@ def get_web_root(wb, datadir_path, daemon_getinfo_var, stop_event=variable.Event
             request.setHeader('Content-Type', self.mime_type)
             request.setHeader('Access-Control-Allow-Origin', '*')
             res = yield self.func(*self.args)
-            defer.returnValue(json.dumps(res) if self.mime_type == 'application/json' else res)
+            if self.mime_type == 'application/json':
+                defer.returnValue(json.dumps(res).encode('utf-8'))
+            else:
+                if isinstance(res, str):
+                    defer.returnValue(res.encode('utf-8'))
+                else:
+                    defer.returnValue(res)
     
     def decent_height():
         return min(node.tracker.get_height(node.best_share_var.value), 720)
-    web_root.putChild('rate', WebInterface(lambda: p2pool_data.get_pool_attempts_per_second(node.tracker, node.best_share_var.value, decent_height())/(1-p2pool_data.get_average_stale_prop(node.tracker, node.best_share_var.value, decent_height()))))
-    web_root.putChild('difficulty', WebInterface(lambda: bitcoin_data.target_to_difficulty(node.tracker.items[node.best_share_var.value].max_target)))
-    web_root.putChild('users', WebInterface(get_users))
-    web_root.putChild('user_stales', WebInterface(lambda: dict((bitcoin_data.pubkey_hash_to_address(ph, node.net.PARENT), prop) for ph, prop in
+    web_root.putChild(b'rate', WebInterface(lambda: p2pool_data.get_pool_attempts_per_second(node.tracker, node.best_share_var.value, decent_height())/(1-p2pool_data.get_average_stale_prop(node.tracker, node.best_share_var.value, decent_height()))))
+    web_root.putChild(b'difficulty', WebInterface(lambda: bitcoin_data.target_to_difficulty(node.tracker.items[node.best_share_var.value].max_target)))
+    web_root.putChild(b'users', WebInterface(get_users))
+    web_root.putChild(b'user_stales', WebInterface(lambda: dict((bitcoin_data.pubkey_hash_to_address(ph, node.net.PARENT), prop) for ph, prop in
         p2pool_data.get_user_stale_props(node.tracker, node.best_share_var.value, node.tracker.get_height(node.best_share_var.value)).items())))
-    web_root.putChild('fee', WebInterface(lambda: wb.worker_fee))
-    web_root.putChild('current_payouts', WebInterface(lambda: dict((bitcoin_data.script2_to_address(script, node.net.PARENT), value/1e8) for script, value in node.get_current_txouts().items())))
-    web_root.putChild('patron_sendmany', WebInterface(get_patron_sendmany, 'text/plain'))
-    web_root.putChild('global_stats', WebInterface(get_global_stats))
-    web_root.putChild('local_stats', WebInterface(get_local_stats))
-    web_root.putChild('peer_addresses', WebInterface(lambda: ' '.join('%s%s' % (peer.transport.getPeer().host, ':'+str(peer.transport.getPeer().port) if peer.transport.getPeer().port != node.net.P2P_PORT else '') for peer in node.p2p_node.peers.values())))
-    web_root.putChild('peer_txpool_sizes', WebInterface(lambda: dict(('%s:%i' % (peer.transport.getPeer().host, peer.transport.getPeer().port), peer.remembered_txs_size) for peer in node.p2p_node.peers.values())))
+    web_root.putChild(b'fee', WebInterface(lambda: wb.worker_fee))
+    web_root.putChild(b'current_payouts', WebInterface(lambda: dict((bitcoin_data.script2_to_address(script, node.net.PARENT), value/1e8) for script, value in node.get_current_txouts().items())))
+    web_root.putChild(b'patron_sendmany', WebInterface(get_patron_sendmany, 'text/plain'))
+    web_root.putChild(b'global_stats', WebInterface(get_global_stats))
+    web_root.putChild(b'local_stats', WebInterface(get_local_stats))
+    web_root.putChild(b'peer_addresses', WebInterface(lambda: ' '.join('%s%s' % (peer.transport.getPeer().host, ':'+str(peer.transport.getPeer().port) if peer.transport.getPeer().port != node.net.P2P_PORT else '') for peer in node.p2p_node.peers.values())))
+    web_root.putChild(b'peer_txpool_sizes', WebInterface(lambda: dict(('%s:%i' % (peer.transport.getPeer().host, peer.transport.getPeer().port), peer.remembered_txs_size) for peer in node.p2p_node.peers.values())))
     @defer.inlineCallbacks
     def get_pings():
         result = {}
@@ -229,25 +235,25 @@ def get_web_root(wb, datadir_path, daemon_getinfo_var, stop_event=variable.Event
 
         defer.returnValue(result)
 
-    web_root.putChild('pings', WebInterface(get_pings))
-    web_root.putChild('peer_versions', WebInterface(lambda: dict(('%s:%i' % peer.addr, peer.other_sub_version) for peer in node.p2p_node.peers.values())))
-    web_root.putChild('payout_addr', WebInterface(lambda: bitcoin_data.pubkey_hash_to_address(wb.my_pubkey_hash, node.net.PARENT)))
-    web_root.putChild('recent_blocks', WebInterface(lambda: [dict(
+    web_root.putChild(b'pings', WebInterface(get_pings))
+    web_root.putChild(b'peer_versions', WebInterface(lambda: dict(('%s:%i' % peer.addr, peer.other_sub_version) for peer in node.p2p_node.peers.values())))
+    web_root.putChild(b'payout_addr', WebInterface(lambda: bitcoin_data.pubkey_hash_to_address(wb.my_pubkey_hash, node.net.PARENT)))
+    web_root.putChild(b'recent_blocks', WebInterface(lambda: [dict(
         ts=s.timestamp,
         hash='%064x' % s.header_hash,
         number=p2pool_data.parse_bip0034(s.share_data['coinbase'])[0],
         share='%064x' % s.hash,
     ) for s in node.tracker.get_chain(node.best_share_var.value, min(node.tracker.get_height(node.best_share_var.value), 24*60*60//node.net.SHARE_PERIOD)) if s.pow_hash <= s.header['bits'].target]))
-    web_root.putChild('uptime', WebInterface(lambda: time.time() - start_time))
-    web_root.putChild('stale_rates', WebInterface(lambda: p2pool_data.get_stale_counts(node.tracker, node.best_share_var.value, decent_height(), rates=True)))
+    web_root.putChild(b'uptime', WebInterface(lambda: time.time() - start_time))
+    web_root.putChild(b'stale_rates', WebInterface(lambda: p2pool_data.get_stale_counts(node.tracker, node.best_share_var.value, decent_height(), rates=True)))
     
     new_root = resource.Resource()
-    web_root.putChild('web', new_root)
+    web_root.putChild(b'web', new_root)
     
     stat_log = []
     if os.path.exists(os.path.join(datadir_path, 'stats')):
         try:
-            with open(os.path.join(datadir_path, 'stats'), 'rb') as f:
+            with open(os.path.join(datadir_path, 'stats'), 'r', encoding='utf-8') as f:
                 stat_log = json.loads(f.read())
         except:
             log.err(None, 'Error loading stats:')
@@ -282,12 +288,12 @@ def get_web_root(wb, datadir_path, daemon_getinfo_var, stop_event=variable.Event
             block_value=node.daemon_work.value['subsidy']*1e-8,
         ))
         
-        with open(os.path.join(datadir_path, 'stats'), 'wb') as f:
+        with open(os.path.join(datadir_path, 'stats'), 'w', encoding='utf-8') as f:
             f.write(json.dumps(stat_log))
     x = deferral.RobustLoopingCall(update_stat_log)
     x.start(5*60)
     stop_event.watch(x.stop)
-    new_root.putChild('log', WebInterface(lambda: stat_log))
+    new_root.putChild(b'log', WebInterface(lambda: stat_log))
     
     def get_share(share_hash_str):
         if int(share_hash_str, 16) not in node.tracker.items:
@@ -327,39 +333,41 @@ def get_web_root(wb, datadir_path, daemon_getinfo_var, stop_event=variable.Event
                 ),
                 gentx=dict(
                     hash='%064x' % share.gentx_hash,
-                    coinbase=share.share_data['coinbase'].ljust(2, '\x00').encode('hex'),
+                    coinbase=share.share_data['coinbase'].ljust(2, b'\x00').hex(),
                     value=share.share_data['subsidy']*1e-8,
                     last_txout_nonce='%016x' % share.contents['last_txout_nonce'],
                 ),
                 other_transaction_hashes=['%064x' % x for x in share.get_other_tx_hashes(node.tracker)],
             ),
         )
-    new_root.putChild('share', WebInterface(lambda share_hash_str: get_share(share_hash_str)))
-    new_root.putChild('heads', WebInterface(lambda: ['%064x' % x for x in node.tracker.heads]))
-    new_root.putChild('verified_heads', WebInterface(lambda: ['%064x' % x for x in node.tracker.verified.heads]))
-    new_root.putChild('tails', WebInterface(lambda: ['%064x' % x for t in node.tracker.tails for x in node.tracker.reverse.get(t, set())]))
-    new_root.putChild('verified_tails', WebInterface(lambda: ['%064x' % x for t in node.tracker.verified.tails for x in node.tracker.verified.reverse.get(t, set())]))
-    new_root.putChild('best_share_hash', WebInterface(lambda: '%064x' % node.best_share_var.value))
-    new_root.putChild('my_share_hashes', WebInterface(lambda: ['%064x' % my_share_hash for my_share_hash in wb.my_share_hashes]))
+    new_root.putChild(b'share', WebInterface(lambda share_hash_str: get_share(share_hash_str)))
+    new_root.putChild(b'heads', WebInterface(lambda: ['%064x' % x for x in node.tracker.heads]))
+    new_root.putChild(b'verified_heads', WebInterface(lambda: ['%064x' % x for x in node.tracker.verified.heads]))
+    new_root.putChild(b'tails', WebInterface(lambda: ['%064x' % x for t in node.tracker.tails for x in node.tracker.reverse.get(t, set())]))
+    new_root.putChild(b'verified_tails', WebInterface(lambda: ['%064x' % x for t in node.tracker.verified.tails for x in node.tracker.verified.reverse.get(t, set())]))
+    new_root.putChild(b'best_share_hash', WebInterface(lambda: '%064x' % node.best_share_var.value))
+    new_root.putChild(b'my_share_hashes', WebInterface(lambda: ['%064x' % my_share_hash for my_share_hash in wb.my_share_hashes]))
     def get_share_data(share_hash_str):
         if int(share_hash_str, 16) not in node.tracker.items:
             return ''
         share = node.tracker.items[int(share_hash_str, 16)]
         return p2pool_data.share_type.pack(share.as_share())
-    new_root.putChild('share_data', WebInterface(lambda share_hash_str: get_share_data(share_hash_str), 'application/octet-stream'))
-    new_root.putChild('currency_info', WebInterface(lambda: dict(
+    new_root.putChild(b'share_data', WebInterface(lambda share_hash_str: get_share_data(share_hash_str), 'application/octet-stream'))
+    new_root.putChild(b'currency_info', WebInterface(lambda: dict(
         symbol=node.net.PARENT.SYMBOL,
         block_explorer_url_prefix=node.net.PARENT.BLOCK_EXPLORER_URL_PREFIX,
         address_explorer_url_prefix=node.net.PARENT.ADDRESS_EXPLORER_URL_PREFIX,
         tx_explorer_url_prefix=node.net.PARENT.TX_EXPLORER_URL_PREFIX,
     )))
-    new_root.putChild('version', WebInterface(lambda: p2pool.__version__))
+    new_root.putChild(b'version', WebInterface(lambda: p2pool.__version__))
     
     hd_path = os.path.join(datadir_path, 'graph_db')
     hd_data = _atomic_read(hd_path)
     hd_obj = {}
     if hd_data is not None:
         try:
+            if isinstance(hd_data, bytes):
+                hd_data = hd_data.decode('utf-8')
             hd_obj = json.loads(hd_data)
         except Exception:
             log.err(None, 'Error reading graph database:')
@@ -458,8 +466,8 @@ def get_web_root(wb, datadir_path, daemon_getinfo_var, stop_event=variable.Event
     @node.daemon_work.changed.watch
     def _(new_work):
         hd.datastreams['getwork_latency'].add_datum(time.time(), new_work['latency'])
-    new_root.putChild('graph_data', WebInterface(lambda source, view: hd.datastreams[source].dataviews[view].get_data(time.time())))
+    new_root.putChild(b'graph_data', WebInterface(lambda source, view: hd.datastreams[source.decode('utf-8')].dataviews[view.decode('utf-8')].get_data(time.time())))
     
-    web_root.putChild('static', static.File(os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), 'web-static')))
+    web_root.putChild(b'static', static.File(os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), 'web-static')))
     
     return web_root

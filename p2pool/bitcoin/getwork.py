@@ -13,7 +13,7 @@ def _swap4(s, flag = False):
       return s
     if len(s) % 4:
         raise ValueError()
-    return ''.join(s[x:x+4][::-1] for x in range(0, len(s), 4))
+    return b''.join(s[x:x+4][::-1] for x in range(0, len(s), 4))
 
 class BlockAttempt(object):
     def __init__(self, version, previous_block, merkle_root, timestamp, bits, share_target):
@@ -48,10 +48,10 @@ class BlockAttempt(object):
 
         
         getwork = {
-            'data': block_data.encode('hex') + '000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000',
+            'data': block_data.hex() + '000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000',
             'hash1': '00000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000010000',
-            'target': pack.IntType(256).pack(self.share_target).encode('hex'),
-            'midstate': sha256.process(sha256.initial_state, block_data[:64]).encode('hex'),
+            'target': pack.IntType(256).pack(self.share_target).hex(),
+            'midstate': sha256.process(sha256.initial_state, block_data[:64]).hex(),
         }
         
         getwork = dict(getwork)
@@ -69,7 +69,7 @@ class BlockAttempt(object):
             merkle_root=_swap4(attrs['merkle_root'],True),
             timestamp=attrs['timestamp'],
             bits=attrs['bits'],
-            share_target=pack.IntType(256).unpack(getwork['target'].decode('hex')),
+            share_target=pack.IntType(256).unpack(bytes.fromhex(getwork['target'])),
         )
     
     def update(self, **kwargs):
@@ -78,4 +78,5 @@ class BlockAttempt(object):
         return self.__class__(**d)
 
 def decode_data(data):
-    return bitcoin_data.block_header_type.unpack(data.decode('hex')[:80])
+    return bitcoin_data.block_header_type.unpack(bytes.fromhex(data)[:80])
+

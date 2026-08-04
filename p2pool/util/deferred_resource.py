@@ -10,6 +10,8 @@ class DeferredResource(resource.Resource):
             if request.channel is None: # disconnected
                 return
             if x is not None:
+                if isinstance(x, str):
+                    x = x.encode('utf-8')
                 request.write(x)
             request.finish()
         
@@ -17,7 +19,7 @@ class DeferredResource(resource.Resource):
             if request.channel is None: # disconnected
                 return
             request.setResponseCode(500) # won't do anything if already written to
-            request.write('---ERROR---')
+            request.write(b'---ERROR---')
             request.finish()
             log.err(fail, "Error in DeferredResource handler:")
         

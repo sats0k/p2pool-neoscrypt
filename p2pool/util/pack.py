@@ -55,11 +55,10 @@ class Type(object):
         
         res = []
         while f is not None:
-            res.append(f[1])
+            res.append(f[1] if isinstance(f[1], bytes) else f[1].encode())
             f = f[0]
         res.reverse()
         return b''.join(res)
-    
     
     def unpack(self, data, ignore_trailing=False):
         obj = self._unpack(data, ignore_trailing)
@@ -97,7 +96,7 @@ class Type(object):
 class VarIntType(Type):
     def read(self, file):
         data, file = read(file, 1)
-        first = ord(data)
+        first = data[0]
         if first < 0xfd:
             return first, file
         if first == 0xfd:
@@ -230,18 +229,28 @@ class IntType(Type):
 class IPV6AddressType(Type):
     def read(self, file):
         data, file = read(file, 16)
-        if data[:12] == '00000000000000000000ffff'.decode('hex'):
-            return '.'.join(str(ord(x)) for x in data[12:]), file
-        return ':'.join(data[i*2:(i+1)*2].encode('hex') for i in range(8)), file
-    
+
+        # IPv4-mapped IPv6 address
+        if data[:12] == bytes.fromhex("00000000000000000000ffff"):
+            return ".".join(str(x) for x in data[12:]), file
+
+        # Raw IPv6
+        return ":".join(data[i*2:(i+1)*2].hex() for i in range(8)), file
+
     def write(self, file, item):
-        if ':' in item:
-            data = ''.join(item.replace(':', '')).decode('hex')
+        if ":" in item:
+            # Remove ':' separators and convert hex to bytes
+            data = bytes.fromhex(item.replace(":", ""))
         else:
-            bits = list(map(int, item.split('.')))
+            bits = list(map(int, item.split(".")))
             if len(bits) != 4:
-                raise ValueError('invalid address: %r' % (bits,))
-            data = '00000000000000000000ffff'.decode('hex') + ''.join(chr(x) for x in bits)
+                raise ValueError("invalid address: %r" % (bits,))
+
+            data = (
+                bytes.fromhex("00000000000000000000ffff")
+                + bytes(bits)
+            )
+
         assert len(data) == 16, len(data)
         return file, data
 
@@ -328,3 +337,4 @@ class FixedStrType(Type):
         if len(item) != self.length:
             raise ValueError('incorrect length item!')
         return file, item
+

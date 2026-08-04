@@ -51,7 +51,14 @@ from types import *
 import re
 import base64
 import socket, http.client
-from http.client import HTTPConnection, HTTP
+from http.client import HTTPConnection
+try:
+    from http.client import HTTPConnection, HTTP
+except ImportError:
+    from http.client import HTTPConnection
+
+    class HTTP(HTTPConnection):
+        pass
 import http.cookies
 
 # SOAPpy modules

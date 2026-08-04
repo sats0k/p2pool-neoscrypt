@@ -15,14 +15,9 @@ def check_output(*popenargs, **kwargs):
 def _get_version():
     try:
         try:
-            return check_output(['git', 'describe', '--always', '--dirty'], cwd=os.path.dirname(os.path.abspath(sys.argv[0]))).strip()
+            return check_output(['git', 'describe', '--always', '--dirty'], cwd=os.path.dirname(os.path.abspath(sys.argv[0]))).decode('utf-8').strip()
         except:
             pass
-        try:
-            return check_output(['git.cmd', 'describe', '--always', '--dirty'], cwd=os.path.dirname(os.path.abspath(sys.argv[0]))).strip()
-        except:
-            pass
-        
         root_dir = os.path.abspath(os.path.dirname(sys.argv[0]))
         git_dir = os.path.join(root_dir, '.git')
         if os.path.exists(git_dir):
@@ -39,10 +34,10 @@ def _get_version():
         if match:
             return match.groups()[0]
         
-        return 'unknown %s' % (dir_name.encode('hex'),)
+        return 'unknown %s' % (dir_name.encode().hex(),)
     except Exception as e:
         traceback.print_exc()
-        return 'unknown %s' % (str(e).encode('hex'),)
+        return 'unknown %s' % (str(e).encode().hex(),)
 
 __version__ = _get_version()
 

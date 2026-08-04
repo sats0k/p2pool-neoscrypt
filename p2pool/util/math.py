@@ -193,7 +193,7 @@ def natural_to_string(n, alphabet=None):
         s = ('%x' % (n,)).lstrip('0')
         if len(s) % 2:
             s = '0' + s
-        return s.decode('hex')
+        return bytes.fromhex(s)
     else:
         assert len(set(alphabet)) == len(alphabet)
         res = []
@@ -201,16 +201,20 @@ def natural_to_string(n, alphabet=None):
             n, x = divmod(n, len(alphabet))
             res.append(alphabet[x])
         res.reverse()
-        return b''.join(res)
+        return ''.join(res)
 
 def string_to_natural(s, alphabet=None):
     if alphabet is None:
-        assert not s.startswith('\x00')
-        return int(s.encode('hex'), 16) if s else 0
+        assert isinstance(s, (bytes, bytearray))
+        assert not s.startswith(b'\x00')
+        return int.from_bytes(s, byteorder='big') if s else 0
     else:
         assert len(set(alphabet)) == len(alphabet)
         assert not s.startswith(alphabet[0])
-        return sum(alphabet.index(char) * len(alphabet)**i for i, char in enumerate(reversed(s)))
+        return sum(
+            alphabet.index(char) * len(alphabet) ** i
+            for i, char in enumerate(reversed(s))
+        )
 
 class RateMonitor(object):
     def __init__(self, max_lookback_time):

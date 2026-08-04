@@ -101,7 +101,6 @@ class P2PNode(p2p.Node):
         self.shared_share_hashes = set(self.node.tracker.items)
         self.node.tracker.removed.watch_weakref(self, lambda self, share: self.shared_share_hashes.discard(share.hash))
         
-        @apply
         @defer.inlineCallbacks
         def download_shares():
             while True:
@@ -111,8 +110,19 @@ class P2PNode(p2p.Node):
                 if len(self.peers) == 0:
                     yield deferral.sleep(1)
                     continue
-                peer = random.choice(list(self.peers.values()))
-                
+
+                peer = None
+                for p in self.peers.values():
+                    if p.addr == peer_addr:
+                        peer = p
+                        break
+
+                #peer = self.peers.get(peer_addr)
+                if peer is None:
+                    print("Peer not found:", peer_addr)
+                    yield deferral.sleep(1)
+                    continue
+
                 print('Requesting parent share %s from %s' % (p2pool_data.format_hash(share_hash), '%s:%i' % peer.addr))
                 try:
                     shares = yield peer.get_shares(
@@ -133,7 +143,8 @@ class P2PNode(p2p.Node):
                     yield deferral.sleep(1) # sleep so we don't keep rerequesting the same share nobody has
                     continue
                 self.handle_shares([(share, []) for share in shares], peer)
-        
+        d = download_shares()
+        d.addErrback(log.err)
         
         @self.node.best_block_header.changed.watch
         def _(header):

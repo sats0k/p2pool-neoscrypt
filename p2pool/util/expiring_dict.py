@@ -14,12 +14,12 @@ class Node(object):
         return node
     
     def insert_after(self, contents):
-        self.next.prev = self.__next__ = node = Node(contents, self, self.__next__)
+        self.next.prev = self.next = node = Node(contents, self, self.next)
         return node
     
     @staticmethod
     def connect(prev, next):
-        if prev.__next__ is not None or next.prev is not None:
+        if prev.next is not None or next.prev is not None:
             raise ValueError('node already connected')
         prev.next, next.prev = next, prev
     
@@ -27,9 +27,9 @@ class Node(object):
         self.contents = contents
     
     def delete(self):
-        if self.prev.__next__ is None or self.next.prev is None:
+        if self.prev.next is None or self.next.prev is None:
             raise ValueError('node not connected')
-        self.prev.next, self.next.prev = self.__next__, self.prev
+        self.prev.next, self.next.prev = self.next, self.prev
         self.next = self.prev = None
 
 
@@ -48,10 +48,10 @@ class LinkedList(object):
         return sum(1 for x in self)
     
     def __iter__(self):
-        cur = self.start.__next__
+        cur = self.start.next
         while cur is not self.end:
             cur2 = cur
-            cur = cur.__next__
+            cur = cur.next
             yield cur2 # in case cur is deleted, but items inserted after are ignored
     
     def __reversed__(self):
@@ -71,7 +71,7 @@ class LinkedList(object):
         else:
             cur = self.start
             for i in range(index + 1):
-                cur = cur.__next__
+                cur = cur.next
                 if cur is self.end:
                     raise IndexError('index out of range')
         return cur

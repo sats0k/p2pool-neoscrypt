@@ -32,7 +32,7 @@ class Protocol(p2protocol.Protocol):
                 port=self.transport.getHost().port,
             ),
             nonce=random.randrange(2**64),
-            sub_version_num='/P2Pool:%s/' % (p2pool.__version__,),
+            sub_version_num=('/P2Pool:%s/' % (p2pool.__version__,)).encode('ascii'),
             start_height=0,
         )
     
@@ -52,8 +52,10 @@ class Protocol(p2protocol.Protocol):
     message_verack = pack.ComposedType([])
     def handle_verack(self):
         self.get_block = deferral.ReplyMatcher(lambda hash: self.send_getdata(requests=[dict(type='block', hash=hash)]))
-        self.get_block_header = deferral.ReplyMatcher(lambda hash: self.send_getheaders(version=1, have=[], last=hash))
-        
+        def request_headers(hash):
+            self.send_getheaders(version=1, have=[], last=hash)
+
+        self.get_block_header = deferral.ReplyMatcher(request_headers, timeout=30)
         if hasattr(self.factory, 'resetDelay'):
             self.factory.resetDelay()
         if hasattr(self.factory, 'gotConnection'):
@@ -123,10 +125,19 @@ class Protocol(p2protocol.Protocol):
         ('headers', pack.ListType(bitcoin_data.block_type)),
     ])
     def handle_headers(self, headers):
-        for header in headers:
-            header = header['header']
-            self.get_block_header.got_response(bitcoin_data.hash256(bitcoin_data.block_header_type.pack(header)), header)
-        self.factory.new_headers.happened([header['header'] for header in headers])
+        for block in headers:
+            header = block['header']
+
+            self.get_block_header.got_response(
+                bitcoin_data.hash256(
+                    bitcoin_data.block_header_type.pack(header)
+                ),
+                header
+            )
+
+        self.factory.new_headers.happened(
+            [block['header'] for block in headers]
+        )
     
     message_ping = pack.ComposedType([
         ('nonce', pack.IntType(64)),

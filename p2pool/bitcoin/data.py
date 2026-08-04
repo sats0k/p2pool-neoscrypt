@@ -13,7 +13,7 @@ def hash256(data):
 
 def hash160(data):
     # PtoPXC8MmB5VwfHFNhVTynATLSHLzq5MgF
-    if data == '0494803BA564D117067A62408A1D85BCE6B559BE5CC30264CFD266B3196E045DAD09D2CDCBA09A752B6A78B74EC068BDB78C78BD13752639961FC839E9446D3AE8'.decode('hex'):
+    if data == bytes.fromhex('0494803BA564D117067A62408A1D85BCE6B559BE5CC30264CFD266B3196E045DAD09D2CDCBA09A752B6A78B74EC068BDB78C78BD13752639961FC839E9446D3AE8'):
         return 0xae607a73abab3fbe742e1523b3fd3dca38d9f4e4 # hack for people who don't have openssl - this is the only value that p2pool ever hashes
     return pack.IntType(160).unpack(hashlib.new('ripemd160', hashlib.sha256(data).digest()).digest())
 
@@ -43,9 +43,9 @@ class FloatingInteger(object):
     @classmethod
     def from_target_upper_bound(cls, target):
         n = math.natural_to_string(target)
-        if n and ord(n[0]) >= 128:
-            n = '\x00' + n
-        bits2 = (chr(len(n)) + (n + 3*chr(0))[:3])[::-1]
+        if n and n[0] >= 0x80:
+            n = b'\x00' + n
+        bits2 = (bytes([len(n)]) + (n + b'\x00\x00\x00')[:3])[::-1]
         bits = pack.IntType(32).unpack(bits2)
         return cls(bits)
     
@@ -250,12 +250,12 @@ def difficulty_to_target(difficulty):
 base58_alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
 
 def base58_encode(bindata):
-    bindata2 = bindata.lstrip(chr(0))
+    bindata2 = bindata.lstrip(b'\x00')
     return base58_alphabet[0]*(len(bindata) - len(bindata2)) + math.natural_to_string(math.string_to_natural(bindata2), base58_alphabet)
 
 def base58_decode(b58data):
     b58data2 = b58data.lstrip(base58_alphabet[0])
-    return chr(0)*(len(b58data) - len(b58data2)) + math.natural_to_string(math.string_to_natural(b58data2, base58_alphabet))
+    return b'\x00'*(len(b58data) - len(b58data2)) + math.natural_to_string(math.string_to_natural(b58data2, base58_alphabet))
 
 human_address_type = ChecksummedType(pack.ComposedType([
     ('version', pack.IntType(8)),
@@ -278,10 +278,10 @@ def address_to_pubkey_hash(address, net):
 
 def pubkey_to_script2(pubkey):
     assert len(pubkey) <= 75
-    return (chr(len(pubkey)) + pubkey) + '\xac'
+    return bytes([len(pubkey)]) + pubkey + b'\xac'
 
 def pubkey_hash_to_script2(pubkey_hash):
-    return '\x76\xa9' + ('\x14' + pack.IntType(160).pack(pubkey_hash)) + '\x88\xac'
+    return b'\x76\xa9' + (b'\x14' + pack.IntType(160).pack(pubkey_hash)) + b'\x88\xac'
 
 def script2_to_address(script2, net):
     try:
@@ -321,4 +321,5 @@ def script2_to_human(script2, net):
         if script2_test2 == script2:
             return 'Address. Address: %s' % (pubkey_hash_to_address(pubkey_hash, net),)
     
-    return 'Unknown. Script: %s'  % (script2.encode('hex'),)
+    return 'Unknown. Script: %s'  % (script2.hex(),)
+

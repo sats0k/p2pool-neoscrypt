@@ -43,13 +43,13 @@ class WorkerInterface(object):
         self.merkle_root_to_handler = expiring_dict.ExpiringDict(300)
     
     def attach_to(self, res, get_handler=None):
-        res.putChild('', _GETableServer(_Provider(self, long_poll=False), get_handler))
+        res.putChild(b'', _GETableServer(_Provider(self, long_poll=False), get_handler))
         
         def repost(request):
             request.content = io.StringIO(json.dumps(dict(id=0, method='getwork')))
             return s.render_POST(request)
         s = _GETableServer(_Provider(self, long_poll=True), repost)
-        res.putChild('long-polling', s)
+        res.putChild(b'long-polling', s)
     
     @defer.inlineCallbacks
     def _getwork(self, request, data, long_poll):
@@ -85,7 +85,7 @@ class WorkerInterface(object):
         res = getwork.BlockAttempt(
             version=x['version'],
             previous_block=x['previous_block'],
-            merkle_root=bitcoin_data.check_merkle_link(bitcoin_data.hash256(x['coinb1'] + '\0'*self.worker_bridge.COINBASE_NONCE_LENGTH + x['coinb2']), x['merkle_link']),
+            merkle_root=bitcoin_data.check_merkle_link(bitcoin_data.hash256(x['coinb1'] + b'\0'*self.worker_bridge.COINBASE_NONCE_LENGTH + x['coinb2']), x['merkle_link']),
             timestamp=x['timestamp'],
             bits=x['bits'],
             share_target=x['share_target'],
@@ -140,3 +140,4 @@ class CachingWorkerBridge(object):
             self._cache[args] = x, handler, nonce + 1
         
         return res
+
