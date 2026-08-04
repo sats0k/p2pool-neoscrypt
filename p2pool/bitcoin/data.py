@@ -71,9 +71,6 @@ class FloatingInteger(object):
     def __ne__(self, other):
         return not (self == other)
     
-    def __cmp__(self, other):
-        assert False
-    
     def __repr__(self):
         return 'FloatingInteger(bits=%s, target=%s)' % (hex(self.bits), hex(self.target))
 

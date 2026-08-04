@@ -58,7 +58,7 @@ class ReplyMatcher(object):
     Converts request/got response interface to deferred interface
     '''
     
-    def __init__(self, func, timeout=5):
+    def __init__(self, func, timeout=60):
         self.func = func
         self.timeout = timeout
         self.map = {}

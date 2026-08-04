@@ -10,15 +10,15 @@ class EarlyEnd(Exception):
 class LateEnd(Exception):
     pass
 
-def read(xxx_todo_changeme, length):
-    (data, pos) = xxx_todo_changeme
+def read(file, length):
+    data, pos = file
     data2 = data[pos:pos + length]
     if len(data2) != length:
         raise EarlyEnd()
     return data2, (data, pos + length)
 
-def size(xxx_todo_changeme1):
-    (data, pos) = xxx_todo_changeme1
+def size(file):
+    data, pos = file
     return len(data) - pos
 
 class Type(object):
@@ -213,18 +213,30 @@ class IntType(Type):
         self.format_str = '%%0%ix' % (2*self.bytes)
         self.max = 2**bits
     
-    def read(self, file, b2a_hex=binascii.b2a_hex):
+    def read(self, file):
         if self.bytes == 0:
             return 0, file
+
         data, file = read(file, self.bytes)
-        return int(b2a_hex(data[::self.step]), 16), file
+
+        return int.from_bytes(
+            data,
+            "little" if self.step == -1 else "big",
+        ), file
     
-    def write(self, file, item, a2b_hex=binascii.a2b_hex):
+    def write(self, file, item):
         if self.bytes == 0:
             return file
+
         if not 0 <= item < self.max:
             raise ValueError('invalid int value - %r' % (item,))
-        return file, a2b_hex(self.format_str % (item,))[::self.step]
+
+        data = item.to_bytes(
+            self.bytes,
+            "little" if self.step == -1 else "big",
+        )
+
+        return file, data
 
 class IPV6AddressType(Type):
     def read(self, file):

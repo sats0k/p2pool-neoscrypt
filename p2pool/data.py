@@ -397,51 +397,96 @@ class Share(object):
 
 
 class WeightsSkipList(forest.TrackerSkipList):
-    # share_count, weights, total_weight
-    
+    # share_count, weights, total_weight, total_donation_weight
+
     def get_delta(self, element):
         from p2pool.bitcoin import data as bitcoin_data
+
         share = self.tracker.items[element]
         att = bitcoin_data.target_to_average_attempts(share.target)
-        return 1, {share.new_script: att*(65535-share.share_data['donation'])}, att*65535, att*share.share_data['donation']
-    
-    def combine_deltas(self, xxx_todo_changeme, xxx_todo_changeme1):
-        (share_count1, weights1, total_weight1, total_donation_weight1) = xxx_todo_changeme
-        (share_count2, weights2, total_weight2, total_donation_weight2) = xxx_todo_changeme1
-        return share_count1 + share_count2, math.add_dicts(weights1, weights2), total_weight1 + total_weight2, total_donation_weight1 + total_donation_weight2
-    
-    def initial_solution(self, start, xxx_todo_changeme2):
-        (max_shares, desired_weight) = xxx_todo_changeme2
+
+        return (
+            1,
+            {share.new_script: att * (65535 - share.share_data['donation'])},
+            att * 65535,
+            att * share.share_data['donation'],
+        )
+
+    def combine_deltas(self, delta1, delta2):
+        share_count1, weights1, total_weight1, total_donation_weight1 = delta1
+        share_count2, weights2, total_weight2, total_donation_weight2 = delta2
+
+        return (
+            share_count1 + share_count2,
+            math.add_dicts(weights1, weights2),
+            total_weight1 + total_weight2,
+            total_donation_weight1 + total_donation_weight2,
+        )
+
+    def initial_solution(self, start, limits):
+        max_shares, desired_weight = limits
+
         assert desired_weight % 65535 == 0, divmod(desired_weight, 65535)
+
         return 0, None, 0, 0
-    
-    def apply_delta(self, xxx_todo_changeme3, xxx_todo_changeme4, xxx_todo_changeme5):
-        (share_count1, weights_list, total_weight1, total_donation_weight1) = xxx_todo_changeme3
-        (share_count2, weights2, total_weight2, total_donation_weight2) = xxx_todo_changeme4
-        (max_shares, desired_weight) = xxx_todo_changeme5
+
+    def apply_delta(self, current, delta, limits):
+        share_count1, weights_list, total_weight1, total_donation_weight1 = current
+        share_count2, weights2, total_weight2, total_donation_weight2 = delta
+        max_shares, desired_weight = limits
+
         if total_weight1 + total_weight2 > desired_weight and share_count2 == 1:
             assert (desired_weight - total_weight1) % 65535 == 0
-            script, = iter(weights2.keys())
-            new_weights = {script: (desired_weight - total_weight1)//65535*weights2[script]//(total_weight2//65535)}
-            return share_count1 + share_count2, (weights_list, new_weights), desired_weight, total_donation_weight1 + (desired_weight - total_weight1)//65535*total_donation_weight2//(total_weight2//65535)
-        return share_count1 + share_count2, (weights_list, weights2), total_weight1 + total_weight2, total_donation_weight1 + total_donation_weight2
-    
-    def judge(self, xxx_todo_changeme6, xxx_todo_changeme7):
-        (share_count, weights_list, total_weight, total_donation_weight) = xxx_todo_changeme6
-        (max_shares, desired_weight) = xxx_todo_changeme7
+
+            script, = weights2.keys()
+
+            new_weights = {
+                script:
+                    (desired_weight - total_weight1) // 65535
+                    * weights2[script]
+                    // (total_weight2 // 65535)
+            }
+
+            return (
+                share_count1 + share_count2,
+                (weights_list, new_weights),
+                desired_weight,
+                total_donation_weight1 +
+                (desired_weight - total_weight1) // 65535
+                * total_donation_weight2
+                // (total_weight2 // 65535),
+            )
+
+        return (
+            share_count1 + share_count2,
+            (weights_list, weights2),
+            total_weight1 + total_weight2,
+            total_donation_weight1 + total_donation_weight2,
+        )
+
+    def judge(self, solution, limits):
+        share_count, weights_list, total_weight, total_donation_weight = solution
+        max_shares, desired_weight = limits
+
         if share_count > max_shares or total_weight > desired_weight:
             return 1
         elif share_count == max_shares or total_weight == desired_weight:
             return 0
         else:
             return -1
-    
-    def finalize(self, xxx_todo_changeme8, xxx_todo_changeme9):
-        (share_count, weights_list, total_weight, total_donation_weight) = xxx_todo_changeme8
-        (max_shares, desired_weight) = xxx_todo_changeme9
+
+    def finalize(self, solution, limits):
+        share_count, weights_list, total_weight, total_donation_weight = solution
+        max_shares, desired_weight = limits
+
         assert share_count <= max_shares and total_weight <= desired_weight
         assert share_count == max_shares or total_weight == desired_weight
-        return math.add_dicts(*math.flatten_linked_list(weights_list)), total_weight, total_donation_weight
+
+        return (
+            math.add_dicts(*math.flatten_linked_list(weights_list)),
+            total_weight,
+            total_donation_weight,
+        )
 
 class OkayTracker(forest.Tracker):
     def __init__(self, net):

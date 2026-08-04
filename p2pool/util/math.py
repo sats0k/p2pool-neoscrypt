@@ -37,8 +37,9 @@ def shift_left(n, m):
         return n << m
     return n >> -m
 
-def clip(x, xxx_todo_changeme):
-    (low, high) = xxx_todo_changeme
+def clip(x, bounds):
+    low, high = bounds
+
     if x < low:
         return low
     elif x > high:
