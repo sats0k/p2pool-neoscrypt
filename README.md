@@ -1,103 +1,150 @@
-Requirements:
--------------------------
-Generic:
-* Python >=2.6
-* Twisted >=10.0.0
-* python-argparse (for Python =2.6)
+# P2Pool NeoScrypt (Python 3.14)
 
-Linux:
-* sudo apt-get install python-zope.interface python-twisted python-twisted-web
-* sudo apt-get install python-argparse # if on Python 2.6
+A modernized Python 3.14 port of the NeoScrypt P2Pool implementation with support for PhoenixCoin Quantum and other NeoScrypt-based cryptocurrencies.
 
-Windows:
-* Install Python 2.7: http://www.python.org/getit/
-* Install Twisted: http://twistedmatrix.com/trac/wiki/Downloads
-* Install Zope.Interface: http://pypi.python.org/pypi/zope.interface/3.8.0
-* Install python win32 api: http://sourceforge.net/projects/pywin32/files/pywin32/Build%20218/
-* Install python win32 api wmi wrapper: https://pypi.python.org/pypi/WMI/#downloads
-* Unzip the files into C:\Python27\Lib\site-packages
+## Requirements
 
-Running P2Pool:
--------------------------
-To use P2Pool, you must be running your own local coin daemon. For standard
-configurations, using P2Pool should be as simple as:
+### Generic
 
-    python run_p2pool.py
+* Python **3.14** or newer
+* Twisted **26.x** or newer
+* zope.interface
 
-Then run your miner program, connecting to 127.0.0.1 on the default worker
-port with any username and password.
+### Linux
 
-If you are behind a NAT, you should enable TCP port forwarding on your
-router. Forward port 9333 to the host running P2Pool.
+Install the required Python packages:
 
-Run for additional options.
+```bash
+python3 -m pip install twisted zope.interface
+```
 
-    python run_p2pool.py --help
+Or use your distribution packages if available.
 
-Official wiki :
--------------------------
+### Windows
+
+* Install Python 3.14 or newer
+* Install the required Python packages:
+
+```bash
+python -m pip install twisted zope.interface
+```
+
+Additional packages may be required depending on your mining environment.
+
+---
+
+# Running P2Pool
+
+To use P2Pool, you must run your own local PhoenixCoin daemon.
+
+For a standard configuration:
+
+```bash
+python3 run_p2pool.py --net phoenixcoin
+```
+
+Then configure your miner to connect to:
+
+```
+Host: 127.0.0.1
+Port: 10554
+```
+
+Any username and password may be used.
+
+If your node should accept incoming P2Pool peers, forward TCP port **10555** to the machine running P2Pool.
+
+To see all available options:
+
+```bash
+python3 run_p2pool.py --help
+```
+
+---
+
+# NeoScrypt Python Module
+
+P2Pool requires the bundled NeoScrypt Python extension.
+
+Build and install it before running P2Pool.
+
+## Linux
+
+```bash
+cd neoscrypt
+python3 setup.py build
+python3 setup.py install
+```
+
+or
+
+```bash
+python3 -m pip install .
+```
+
+## Windows
+
+Build the extension using a supported Visual Studio toolchain or MinGW compatible with your Python installation.
+
+---
+
+# PhoenixCoin
+
+Run P2Pool with:
+
+```bash
+python3 run_p2pool.py --net phoenixcoin
+```
+
+Default ports:
+
+| Service |  Port |
+| ------- | ----: |
+| Stratum | 10554 |
+| P2P     | 10555 |
+
+Configure your miner to connect to:
+
+```
+127.0.0.1:10554
+```
+
+Forward TCP port **10555** if your node should participate in the public P2Pool network.
+
+---
+
+# Project Status
+
+This repository has been successfully migrated from **Python 2.7** to **Python 3.14**.
+
+The following functionality has been restored:
+
+* Python 3.14 compatibility
+* Twisted 26 compatibility
+* NeoScrypt support
+* P2P networking
+* Sharechain synchronization
+* Stratum mining server
+* JSON-RPC communication
+* Web interface and statistics
+* Block submission to the PhoenixCoin daemon
+
+The project is currently in the stabilization and long-term testing phase.
+
+---
+
+# Official P2Pool Wiki
+
 https://en.bitcoin.it/wiki/P2Pool
 
-Alternate web front end :
--------------------------
-* https://github.com/hardcpp/P2PoolExtendedFrontEnd
+---
 
-Notes for NeoScrypt:
-=========================
-Requirements:
--------------------------
-In order to use P2Pool with any NeoScrypt powered coin, you need to build
-and install the NeoScrypt Python module first.
+# Alternate Web Frontend
 
-Linux:
+https://github.com/hardcpp/P2PoolExtendedFrontEnd
 
-    cd neoscrypt
-    sudo python setup.py install
+---
 
-Windows (mingw):
-* Install MinGW: http://www.mingw.org/wiki/Getting_Started
-* Install Python 2.7: http://www.python.org/getit/
+# License
 
-In bash type this:
-
-    cd neoscrypt
-    C:\Python27\python.exe setup.py build --compile=mingw32 install
-
-Windows (microsoft visual c++)
-* Open visual studio console
-
-In bash type this:
-
-    SET VS90COMNTOOLS=%VS110COMNTOOLS%	           # For visual c++ 2012
-    SET VS90COMNTOOLS=%VS100COMNTOOLS%             # For visual c++ 2010
-    cd litecoin_scrypt
-    C:\Python27\python.exe setup.py build --compile=mingw32 install
-
-If you run into an error with unrecognized command line option '-mno-cygwin', see this:
-http://stackoverflow.com/questions/6034390/compiling-with-cython-and-mingw-produces-gcc-error-unrecognized-command-line-o
-
-Running P2Pool for Phoenixcoin:
--------------------------------
-Run P2Pool with the "--net phoenixcoin" option.
-Run your miner program, connecting to 127.0.0.1 on port 10554.
-Forward port 10555 on your router to any PXC nodes running P2Pool.
-
-Running P2Pool for Feathercoin:
--------------------------------
-Run P2Pool with the "--net feathercoin" option.
-Run your miner program, connecting to 127.0.0.1 on port 19327.
-Forward port 19339 on your router to any FTC nodes running P2Pool.
-
-Sponsors:
--------------------------
-
-Thanks to:
-* The Bitcoin Foundation for its generous support of P2Pool
-* The Litecoin Project for its generous donations to P2Pool
- 
-License:
--------------------------
-
-[Available here](LICENCE)
-
-
+See the [LICENCE](LICENCE) file.
