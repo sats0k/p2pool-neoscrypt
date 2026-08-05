@@ -624,8 +624,20 @@ class OkayTracker(forest.Tracker):
         
         end_point = self.verified.get_nth_parent_hash(share_hash, self.net.CHAIN_LENGTH*15//16)
         
-        block_height = max(block_rel_height_func(share.header['previous_block']) for share in
-            self.verified.get_chain(end_point, self.net.CHAIN_LENGTH//16))
+        height_cache = {}
+
+        def get_height(block_hash):
+            if block_hash not in height_cache:
+                height_cache[block_hash] = block_rel_height_func(block_hash)
+            return height_cache[block_hash]
+
+        block_height = max(
+            get_height(share.header['previous_block'])
+            for share in self.verified.get_chain(
+                end_point,
+                self.net.CHAIN_LENGTH // 16
+            )
+        )
         
         return self.net.CHAIN_LENGTH, self.verified.get_delta(share_hash, end_point).work/((0 - block_height + 1)*self.net.PARENT.BLOCK_PERIOD)
 
@@ -715,6 +727,12 @@ class ShareStore(object):
         self.dirname = os.path.dirname(os.path.abspath(prefix))
         self.filename = os.path.basename(os.path.abspath(prefix))
         self.net = net
+        self._suffixes = sorted(
+            int(name[len(self.filename):])
+            for name in os.listdir(self.dirname)
+            if name.startswith(self.filename)
+            and name[len(self.filename):].isdigit()
+        )
         
         known = {}
         filenames, next = self.get_filenames_and_next()
@@ -781,10 +799,19 @@ class ShareStore(object):
             verified_hashes.add(share_hash)
         share_hashes, verified_hashes = self.known_desired.setdefault(filename, (set(), set()))
         verified_hashes.add(share_hash)
-    
+
     def get_filenames_and_next(self):
-        suffixes = sorted(int(x[len(self.filename):]) for x in os.listdir(self.dirname) if x.startswith(self.filename) and x[len(self.filename):].isdigit())
-        return [os.path.join(self.dirname, self.filename + str(suffix)) for suffix in suffixes], os.path.join(self.dirname, self.filename + (str(suffixes[-1] + 1) if suffixes else str(0)))
+        filenames = [
+            os.path.join(self.dirname, self.filename + str(suffix))
+            for suffix in self._suffixes
+        ]
+
+        next_suffix = self._suffixes[-1] + 1 if self._suffixes else 0
+
+        return (
+            filenames,
+            os.path.join(self.dirname, self.filename + str(next_suffix)),
+        )
     
     def forget_share(self, share_hash):
         for filename, (share_hashes, verified_hashes) in self.known_desired.items():

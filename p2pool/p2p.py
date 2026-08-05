@@ -255,22 +255,35 @@ class Protocol(p2protocol.Protocol):
     ])
     def handle_shares(self, shares):
         result = []
+        known_txs = self.node.known_txs_var.value
+        latency_caches = self.known_txs_cache.values()
         for wrappedshare in shares:
-            if wrappedshare['type'] < p2pool_data.Share.VERSION: continue
-            share = p2pool_data.load_share(wrappedshare, self.node.net, self.addr)
+            if wrappedshare['type'] < p2pool_data.Share.VERSION:
+                continue
+            share = p2pool_data.load_share(
+                wrappedshare,
+                self.node.net,
+                self.addr,
+            )
             if wrappedshare['type'] >= 13:
                 txs = []
                 for tx_hash in share.share_info['new_transaction_hashes']:
-                    if tx_hash in self.node.known_txs_var.value:
-                        tx = self.node.known_txs_var.value[tx_hash]
-                    else:
-                        for cache in self.known_txs_cache.values():
-                            if tx_hash in cache:
-                                tx = cache[tx_hash]
-                                print('Transaction %064x rescued from peer latency cache!' % (tx_hash,))
+                    tx = known_txs.get(tx_hash)
+                    if tx is None:
+                        for cache in latency_caches:
+                            tx = cache.get(tx_hash)
+                            if tx is not None:
+                                print(
+                                    'Transaction %064x rescued from peer latency cache!' %
+                                    (tx_hash,)
+                                )
                                 break
                         else:
-                            print('Peer referenced unknown transaction %064x, disconnecting' % (tx_hash,), file=sys.stderr)
+                            print(
+                                'Peer referenced unknown transaction %064x, disconnecting' %
+                                (tx_hash,),
+                                file=sys.stderr,
+                            )
                             self.disconnect()
                             return
                     txs.append(tx)
@@ -298,7 +311,18 @@ class Protocol(p2protocol.Protocol):
         
         hashes_to_send = [x for x in tx_hashes if x not in self.node.mining_txs_var.value and x in known_txs]
         
-        new_remote_remembered_txs_size = self.remote_remembered_txs_size + sum(100 + bitcoin_data.tx_type.packed_size(known_txs[x]) for x in hashes_to_send)
+        tx_size_cache = {}
+        def tx_size(tx_hash):
+            try:
+                return tx_size_cache[tx_hash]
+            except KeyError:
+                size = bitcoin_data.tx_type.packed_size(known_txs[tx_hash])
+                tx_size_cache[tx_hash] = size
+                return size
+        new_remote_remembered_txs_size = (
+            self.remote_remembered_txs_size
+            + sum(100 + tx_size(tx_hash) for tx_hash in hashes_to_send)
+        )
         if new_remote_remembered_txs_size > self.max_remembered_txs_size:
             raise ValueError('shares have too many txs')
         self.remote_remembered_txs_size = new_remote_remembered_txs_size

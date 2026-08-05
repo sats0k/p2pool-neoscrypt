@@ -111,13 +111,7 @@ class P2PNode(p2p.Node):
                     yield deferral.sleep(1)
                     continue
 
-                peer = None
-                for p in self.peers.values():
-                    if p.addr == peer_addr:
-                        peer = p
-                        break
-
-                #peer = self.peers.get(peer_addr)
+                peer = self.node.peers_by_addr.get(peer_addr)
                 if peer is None:
                     print("Peer not found:", peer_addr)
                     yield deferral.sleep(1)
@@ -125,12 +119,20 @@ class P2PNode(p2p.Node):
 
                 print('Requesting parent share %s from %s' % (p2pool_data.format_hash(share_hash), '%s:%i' % peer.addr))
                 try:
+                    heads = tuple(self.node.tracker.heads)
+                    heads_set = set(heads)
+                    additional_heads = {
+                        self.node.tracker.get_nth_parent_hash(
+                            head,
+                            min(max(0, self.node.tracker.get_height_and_last(head)[0] - 1), 10),
+                         )
+                         for head in heads
+                    }
+                    stops = list(heads_set | additional_heads)[:100]
                     shares = yield peer.get_shares(
                         hashes=[share_hash],
-                        parents=random.randrange(500), # randomize parents so that we eventually get past a too large block of shares
-                        stops=list(set(self.node.tracker.heads) | set(
-                            self.node.tracker.get_nth_parent_hash(head, min(max(0, self.node.tracker.get_height_and_last(head)[0] - 1), 10)) for head in self.node.tracker.heads
-                        ))[:100],
+                        parents=random.randrange(500),
+                        stops=stops,
                     )
                 except defer.TimeoutError:
                     print('Share request timed out!')
@@ -140,7 +142,7 @@ class P2PNode(p2p.Node):
                     continue
                 
                 if not shares:
-                    yield deferral.sleep(1) # sleep so we don't keep rerequesting the same share nobody has
+                    yield deferral.sleep(1)
                     continue
                 self.handle_shares([(share, []) for share in shares], peer)
         d = download_shares()
@@ -164,7 +166,7 @@ class P2PNode(p2p.Node):
                     self.node.daemon_work.value['previous_block'] in [share.header['previous_block'], share.header_hash]):
                     self.broadcast_share(share.hash)
             spread()
-            reactor.callLater(5, spread) # so get_height_rel_highest can update
+            reactor.callLater(5, spread)
         
 
 class Node(object):
@@ -182,7 +184,8 @@ class Node(object):
             if share_hash in self.tracker.items:
                 self.tracker.verified.add(self.tracker.items[share_hash])
         
-        self.p2p_node = None # overwritten externally
+        self.p2p_node = None
+        self.peers_by_addr = {}
     
     @defer.inlineCallbacks
     def start(self):
@@ -215,11 +218,11 @@ class Node(object):
                 or (
                     new_header['previous_block'] == daemon_best_block and
                     bitcoin_data.hash256(bitcoin_data.block_header_type.pack(self.best_block_header.value)) == daemon_best_block
-                ) # new is child of current and previous is current
+                )
                 or (
                     bitcoin_data.hash256(bitcoin_data.block_header_type.pack(new_header)) == daemon_best_block and
                     self.best_block_header.value['previous_block'] != daemon_best_block
-                )): # new is current and previous is not a child of current
+                )):
                 self.best_block_header.set(new_header)
         self.handle_header = handle_header
         @defer.inlineCallbacks
@@ -232,8 +235,8 @@ class Node(object):
         
         # BEST SHARE
         
-        self.known_txs_var = variable.Variable({}) # hash -> tx
-        self.mining_txs_var = variable.Variable({}) # hash -> tx
+        self.known_txs_var = variable.Variable({})
+        self.mining_txs_var = variable.Variable({})
         self.get_height_rel_highest = yield height_tracker.get_height_rel_highest_func(self.daemon, self.factory, lambda: self.daemon_work.value['previous_block'], self.net)
         
         self.best_share_var = variable.Variable(None)
@@ -308,12 +311,11 @@ class Node(object):
         self.best_share_var.set(best)
         self.desired_var.set(desired)
         if self.p2p_node is not None:
+            self.peers_by_addr = {peer.addr: peer for peer in self.p2p_node.peers.values()}
             for bad_peer_address in bad_peer_addresses:
-                # XXX O(n)
-                for peer in self.p2p_node.peers.values():
-                    if peer.addr == bad_peer_address:
-                        peer.badPeerHappened()
-                        break
+                peer = self.peers_by_addr.get(bad_peer_address)
+                if peer is not None:
+                    peer.badPeerHappened()
     
     def get_current_txouts(self):
         return p2pool_data.get_expected_payouts(self.tracker, self.best_share_var.value, self.daemon_work.value['bits'].target, self.daemon_work.value['subsidy'], self.net)
@@ -323,17 +325,15 @@ class Node(object):
         
         # eat away at heads
         if decorated_heads:
+            top_heads = set(head_hash for score, head_hash in decorated_heads[-5:])
             for i in range(1000):
                 to_remove = set()
                 for share_hash, tail in self.tracker.heads.items():
-                    if share_hash in [head_hash for score, head_hash in decorated_heads[-5:]]:
-                        #print 1
+                    if share_hash in top_heads:
                         continue
                     if self.tracker.items[share_hash].time_seen > time.time() - 300:
-                        #print 2
                         continue
-                    if share_hash not in self.tracker.verified.items and max(self.tracker.items[after_tail_hash].time_seen for after_tail_hash in self.tracker.reverse.get(tail)) > time.time() - 120: # XXX stupid
-                        #print 3
+                    if share_hash not in self.tracker.verified.items and max(self.tracker.items[after_tail_hash].time_seen for after_tail_hash in self.tracker.reverse.get(tail)) > time.time() - 1:
                         continue
                     to_remove.add(share_hash)
                 if not to_remove:
@@ -342,7 +342,6 @@ class Node(object):
                     if share_hash in self.tracker.verified.items:
                         self.tracker.verified.remove(share_hash)
                     self.tracker.remove(share_hash)
-                #print "_________", to_remove
         
         # drop tails
         for i in range(1000):
@@ -353,8 +352,6 @@ class Node(object):
                 to_remove.update(self.tracker.reverse.get(tail, set()))
             if not to_remove:
                 break
-            # if removed from this, it must be removed from verified
-            #start = time.time()
             for aftertail in to_remove:
                 if self.tracker.items[aftertail].previous_hash not in self.tracker.tails:
                     print("erk", aftertail, self.tracker.items[aftertail].previous_hash)
@@ -362,7 +359,5 @@ class Node(object):
                 if aftertail in self.tracker.verified.items:
                     self.tracker.verified.remove(aftertail)
                 self.tracker.remove(aftertail)
-            #end = time.time()
-            #print "removed! %i %f" % (len(to_remove), (end - start)/len(to_remove))
         
         self.set_best_share()
