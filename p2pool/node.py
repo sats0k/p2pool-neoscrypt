@@ -227,10 +227,21 @@ class Node(object):
         self.handle_header = handle_header
         @defer.inlineCallbacks
         def poll_header():
+            result = yield self.factory.conn.value.get_block_header(
+                self.daemon_work.value['previous_block']
+            )
+            handle_header(result)
             if self.factory.conn.value is None:
                 return
-            handle_header((yield self.factory.conn.value.get_block_header(self.daemon_work.value['previous_block'])))
-        self.daemon_work.changed.watch(lambda _: poll_header())
+
+        last_previous_block = None
+
+        @self.daemon_work.changed.watch
+        def debug_daemon_work(_=None):
+            nonlocal last_previous_block
+            previous_block = self.daemon_work.value['previous_block']
+            last_previous_block = previous_block
+
         yield deferral.retry('Error while requesting best block header:')(poll_header)()
         
         # BEST SHARE

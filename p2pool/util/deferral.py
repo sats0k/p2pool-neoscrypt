@@ -54,34 +54,62 @@ def retry(message='Error:', delay=3, max_retries=None, traceback=True):
     return retry2
 
 class ReplyMatcher(object):
-    '''
-    Converts request/got response interface to deferred interface
-    '''
-    
-    def __init__(self, func, timeout=60):
+
+    def __init__(self, func, timeout=5):
         self.func = func
         self.timeout = timeout
         self.map = {}
-    
-    def __call__(self, id):
+
+    def __call__(self, request_id):
         if id not in self.map:
-            self.func(id)
+            self.func(request_id)
+
         df = defer.Deferred()
         def timeout():
-            self.map[id].remove((df, timer))
-            if not self.map[id]:
-                del self.map[id]
-            df.errback(failure.Failure(defer.TimeoutError('in ReplyMatcher')))
+
+            pending = self.map.get(request_id)
+
+            if pending is None:
+                return
+
+            pending.discard((df, timer))
+
+            if not pending:
+                del self.map[request_id]
+
+            if not df.called:
+                df.errback(
+                    failure.Failure(defer.TimeoutError("in ReplyMatcher"))
+                )
+
+            if request_id not in self.map:
+                return
+
+            self.map[request_id].remove((df, timer))
+
+            if not self.map[request_id]:
+                del self.map[request_id]
+
+            df.errback(failure.Failure(defer.TimeoutError("in ReplyMatcher")))
+
         timer = reactor.callLater(self.timeout, timeout)
-        self.map.setdefault(id, set()).add((df, timer))
+
+        self.map.setdefault(request_id, set()).add((df, timer))
+
         return df
-    
-    def got_response(self, id, resp):
-        if id not in self.map:
+
+    def got_response(self, request_id, resp):
+        known = request_id in self.map
+
+        if not known:
             return
-        for df, timer in self.map.pop(id):
-            df.callback(resp)
+
+        pending = self.map.pop(request_id)
+
+        for df, timer in pending:
+
             timer.cancel()
+            df.callback(resp)
 
 class GenericDeferrer(object):
     '''

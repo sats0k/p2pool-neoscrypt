@@ -55,7 +55,7 @@ class Protocol(p2protocol.Protocol):
         def request_headers(hash):
             self.send_getheaders(version=1, have=[], last=hash)
 
-        self.get_block_header = deferral.ReplyMatcher(request_headers, timeout=30)
+        self.get_block_header = deferral.ReplyMatcher(request_headers)
         if hasattr(self.factory, 'resetDelay'):
             self.factory.resetDelay()
         if hasattr(self.factory, 'gotConnection'):
@@ -128,10 +128,11 @@ class Protocol(p2protocol.Protocol):
         for block in headers:
             header = block['header']
 
+            block_hash = bitcoin_data.hash256(
+                bitcoin_data.block_header_type.pack(header)
+            )
             self.get_block_header.got_response(
-                bitcoin_data.hash256(
-                    bitcoin_data.block_header_type.pack(header)
-                ),
+                block_hash,
                 header
             )
 
