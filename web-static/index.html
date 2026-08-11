@@ -407,7 +407,7 @@
           .append($.format.prettyDate(new Date(ts * 1000))));
         tr.append($('<td/>').append(num));
         tr.append($('<td/>').append(blockinfo));
-        tr.append($('<td/>').html('&dash;'));
+        tr.append($('<td/>').text(block.confirmations));
         $('#'+num).remove(); $('#recent_blocks').append(tr);
       });
     });

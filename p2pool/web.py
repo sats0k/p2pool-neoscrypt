@@ -239,9 +239,11 @@ def get_web_root(wb, datadir_path, daemon_getinfo_var, stop_event=variable.Event
     web_root.putChild(b'peer_versions', WebInterface(lambda: dict(('%s:%i' % peer.addr, peer.other_sub_version) for peer in node.p2p_node.peers.values())))
     web_root.putChild(b'payout_addr', WebInterface(lambda: bitcoin_data.pubkey_hash_to_address(wb.my_pubkey_hash, node.net.PARENT)))
     web_root.putChild(b'recent_blocks', WebInterface(lambda: [dict(
-        ts=s.timestamp,
+        ts=s.header['timestamp'],
         hash='%064x' % s.header_hash,
         number=p2pool_data.parse_bip0034(s.share_data['coinbase'])[0],
+        confirmations=node.daemon_work.value['height'] -
+            p2pool_data.parse_bip0034(s.share_data['coinbase'])[0],
         share='%064x' % s.hash,
     ) for s in node.tracker.get_chain(node.best_share_var.value, min(node.tracker.get_height(node.best_share_var.value), 24*60*60//node.net.SHARE_PERIOD)) if s.pow_hash <= s.header['bits'].target]))
     web_root.putChild(b'uptime', WebInterface(lambda: time.time() - start_time))
