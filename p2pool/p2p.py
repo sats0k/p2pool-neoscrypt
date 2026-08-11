@@ -226,20 +226,9 @@ class Protocol(p2protocol.Protocol):
             ('address', bitcoin_data.address_type),
         ]))),
     ])
-
-    # PhoenixCoin legacy addr messages contain no timestamp.
-    # Supply the local receive time for P2Pool's address manager.
-    message_addr = pack.ComposedType([
-        ('addrs', pack.ListType(bitcoin_data.address_type)),
-    ])
-
-    def handle_addr(self, addrs):
-        for addr in addrs:
-            self.node.got_addr(
-                (addr['address'], addr['port']),
-                addr['services'],
-                int(time.time()),
-            )
+    def handle_addrs(self, addrs):
+        for addr_record in addrs:
+            self.node.got_addr((addr_record['address']['address'], addr_record['address']['port']), addr_record['address']['services'], min(int(time.time()), addr_record['timestamp']))
             if random.random() < .8 and self.node.peers:
                 random.choice(list(self.node.peers.values())).send_addrs(addrs=[addr_record])
     
