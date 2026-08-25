@@ -166,21 +166,35 @@ class WorkerBridge(worker_interface.WorkerBridge):
         
         if random.uniform(0, 100) < self.worker_fee:
             pubkey_hash = self.my_pubkey_hash
+            pubkey_type = 0
         else:
             try:
-                pubkey_hash = bitcoin_data.address_to_pubkey_hash(user, self.node.net.PARENT)
-            except: # XXX blah
+                address_data = bitcoin_data.human_address_type.unpack(
+                    bitcoin_data.base58_decode(user)
+                )
+
+                pubkey_hash = address_data['pubkey_hash']
+
+                if address_data['version'] == self.node.net.PARENT.HYBRID_ADDRESS_VERSION:
+                    pubkey_type = 1
+                elif address_data['version'] == self.node.net.PARENT.ADDRESS_VERSION:
+                    pubkey_type = 0
+                else:
+                    raise ValueError('unknown address version')
+
+            except:
                 pubkey_hash = self.my_pubkey_hash
+                pubkey_type = 0
         
-        return user, pubkey_hash, desired_share_target, desired_pseudoshare_target
+        return user, pubkey_hash, pubkey_type, desired_share_target, desired_pseudoshare_target
     
     def preprocess_request(self, user):
         if (self.node.p2p_node is None or len(self.node.p2p_node.peers) == 0) and self.node.net.PERSIST:
             raise jsonrpc.Error_for_code(-12345)('p2pool is not connected to any peers')
         if time.time() > self.current_work.value['last_update'] + 60:
             raise jsonrpc.Error_for_code(-12345)('lost contact with the daemon')
-        user, pubkey_hash, desired_share_target, desired_pseudoshare_target = self.get_user_details(user)
-        return user, pubkey_hash, desired_share_target, desired_pseudoshare_target
+        user, pubkey_hash, pubkey_type, desired_share_target, desired_pseudoshare_target = self.get_user_details(user)
+        return user, pubkey_hash, pubkey_type, desired_share_target, desired_pseudoshare_target
     
     def _estimate_local_hash_rate(self):
         if len(self.recent_shares_ts_work) == 50:
@@ -203,7 +217,8 @@ class WorkerBridge(worker_interface.WorkerBridge):
         addr_hash_rates = {}
         datums, dt = self.local_addr_rate_monitor.get_datums_in_last()
         for datum in datums:
-            addr_hash_rates[datum['pubkey_hash']] = addr_hash_rates.get(datum['pubkey_hash'], 0) + datum['work']/dt
+            key = (datum['pubkey_hash'], datum.get('pubkey_type', 0))
+            addr_hash_rates[key] = addr_hash_rates.get(key, 0) + datum['work']/dt
         return addr_hash_rates
     def get_local_addr_rate(self, pubkey_hash):
         addr_hash_rate = 0
@@ -220,7 +235,7 @@ class WorkerBridge(worker_interface.WorkerBridge):
                 miner_hash_rate = miner_hash_rate + datum['work']/dt
         return miner_hash_rate
     
-    def get_work(self, user, pubkey_hash, desired_share_target, desired_pseudoshare_target):    
+    def get_work(self, user, pubkey_hash, pubkey_type, desired_share_target, desired_pseudoshare_target):
         if self.node.best_share_var.value is None and self.node.net.PERSIST:
             raise jsonrpc.Error_for_code(-12345)('p2pool is downloading shares')
         
@@ -274,7 +289,7 @@ class WorkerBridge(worker_interface.WorkerBridge):
             lookbehind = 3600//self.node.net.SHARE_PERIOD
             block_subsidy = self.node.daemon_work.value['subsidy']
             if previous_share is not None and self.node.tracker.get_height(previous_share.hash) > lookbehind:
-                expected_payout_per_block = local_addr_rates.get(pubkey_hash, 0)/p2pool_data.get_pool_attempts_per_second(self.node.tracker, self.node.best_share_var.value, lookbehind) \
+                expected_payout_per_block = local_addr_rates.get((pubkey_hash, pubkey_type), 0)/p2pool_data.get_pool_attempts_per_second(self.node.tracker, self.node.best_share_var.value, lookbehind) \
                     * block_subsidy*(1-self.donation_percentage/100) # XXX doesn't use global stale rate to compute pool hash
                 if expected_payout_per_block < self.node.net.PARENT.DUST_THRESHOLD:
                     desired_share_target = min(desired_share_target,
@@ -304,6 +319,7 @@ class WorkerBridge(worker_interface.WorkerBridge):
                     ]) + self.current_work.value['coinbaseflags'])[:100],
                     nonce=random.randrange(2**32),
                     pubkey_hash=pubkey_hash,
+                    pubkey_type=pubkey_type,
                     subsidy=self.current_work.value['subsidy'],
                     donation=math.perfect_round(65535*self.donation_percentage/100),
                     stale_info=_stale_info(*self.get_stale_counts()),
@@ -334,7 +350,7 @@ class WorkerBridge(worker_interface.WorkerBridge):
 
                 if self.share_rate_type == 'address': # per-address
                     if local_addr_rates is not None:
-                        local_rate = local_addr_rates.get(pubkey_hash, 0)
+                        local_rate = local_addr_rates.get((pubkey_hash, pubkey_type), 0)
                     else:
                         local_rate = self.get_local_addr_rate(pubkey_hash)
                 else: # per-miner
@@ -403,7 +419,7 @@ class WorkerBridge(worker_interface.WorkerBridge):
             except:
                 log.err(None, 'Error while processing potential block:')
             
-            user, _, _, _ = self.get_user_details(user)
+            user, _, _, _, _ = self.get_user_details(user)
             assert header['previous_block'] == ba['previous_block']
             assert header['merkle_root'] == bitcoin_data.check_merkle_link(bitcoin_data.hash256(new_packed_gentx), merkle_link)
             assert header['bits'] == ba['bits']
@@ -480,7 +496,7 @@ class WorkerBridge(worker_interface.WorkerBridge):
                 while len(self.recent_shares_ts_work) > 50:
                     self.recent_shares_ts_work.pop(0)
                 self.local_rate_monitor.add_datum(dict(work=bitcoin_data.target_to_average_attempts(target), dead=not on_time, user=user, share_target=share_info['bits'].target))
-                self.local_addr_rate_monitor.add_datum(dict(work=bitcoin_data.target_to_average_attempts(target), pubkey_hash=pubkey_hash))
+                self.local_addr_rate_monitor.add_datum(dict(work=bitcoin_data.target_to_average_attempts(target), pubkey_hash=pubkey_hash, pubkey_type=pubkey_type))
             
             return on_time
         

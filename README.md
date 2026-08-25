@@ -1,6 +1,6 @@
-# P2Pool NeoScrypt (Python 3.14)
+# P2Pool NeoScrypt 14.0.0-hybrid (Python 3.14)
 
-A modernized Python 3.14 port of the NeoScrypt P2Pool implementation with support for PhoenixCoin Quantum and other NeoScrypt-based cryptocurrencies.
+A modernized Python 3.14 port of the NeoScrypt P2Pool implementation with PhoenixCoin Quantum hybrid ECDSA/ML-DSA payout support.
 
 ## Requirements
 
@@ -36,6 +36,9 @@ Additional packages may be required depending on your mining environment.
 # Running P2Pool
 
 To use P2Pool, you must run your own local PhoenixCoin daemon.
+
+For PhoenixCoin Quantum hybrid mining, use a daemon build with hybrid address support.
+PhoenixCoin Quantum hybrid addresses are supported for direct P2Pool mining. No special `-minehybrid=1` daemon option is required by P2Pool.
 
 For a standard configuration:
 
@@ -111,6 +114,26 @@ Configure your miner to connect to:
 
 Forward TCP port **10555** if your node should participate in the public P2Pool network.
 
+## Hybrid Mining
+
+PhoenixCoin Quantum supports hybrid ECDSA/ML-DSA payout addresses. This P2Pool version supports mining directly to a hybrid address in addition to traditional PhoenixCoin addresses.
+
+Use the hybrid address as the miner username, for example:
+
+```text
+<hybrid-address>
+```
+
+The P2Pool share format used by this version includes the payout type so that legacy and hybrid payout scripts can be distinguished correctly.
+
+### P2Pool 14.0.0-hybrid
+
+Hybrid payout support changes the P2Pool share serialization. This release uses the **v14 share format** and the **v14 P2Pool peer protocol**. It is **not compatible with P2Pool v13 peers**.
+
+All P2Pool peers participating in the same sharechain must run **14.0.0-hybrid** (or another implementation using the same v14 share format and peer protocol). P2Pool v13 peers are rejected during the peer handshake, preventing them from joining the v14 sharechain.
+
+Legacy PhoenixCoin payout addresses remain supported; hybrid support does not require all miners to use hybrid addresses.
+
 ---
 
 # Project Status
@@ -128,6 +151,10 @@ The following functionality has been restored:
 * JSON-RPC communication
 * Web interface and statistics
 * Block submission to the PhoenixCoin daemon
+* PhoenixCoin Quantum hybrid ECDSA/ML-DSA payout support
+* Direct mining to hybrid payout addresses
+* P2Pool 14.0.0-hybrid share format with explicit payout type
+* P2Pool v14 peer protocol; P2Pool v13 peers are rejected
 
 The project is currently in the stabilization and long-term testing phase.
 

@@ -9,6 +9,7 @@ from p2pool.util import pack
 P2P_PREFIX = bytes.fromhex('FED0D8C3')
 P2P_PORT = 9555
 ADDRESS_VERSION = 56
+HYBRID_ADDRESS_VERSION = 58
 RPC_PORT = 9554
 RPC_CHECK = defer.inlineCallbacks(lambda phoenixcoind: defer.returnValue(
 (yield helper.check_genesis_block(phoenixcoind, 'be2f30f9e8db8f430056869c43503a992d232b28508e83eda101161a18cf7c73'))))

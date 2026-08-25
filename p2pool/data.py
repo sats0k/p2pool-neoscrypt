@@ -75,8 +75,8 @@ def load_share(share, net, peer_addr):
 DONATION_SCRIPT = bytes.fromhex('410494803BA564D117067A62408A1D85BCE6B559BE5CC30264CFD266B3196E045DAD09D2CDCBA09A752B6A78B74EC068BDB78C78BD13752639961FC839E9446D3AE8AC')
 
 class Share(object):
-    VERSION = 13
-    VOTING_VERSION = 13
+    VERSION = 14
+    VOTING_VERSION = 14
     SUCCESSOR = None
     
     small_block_header_type = pack.ComposedType([
@@ -93,6 +93,7 @@ class Share(object):
             ('coinbase', pack.VarStrType()),
             ('nonce', pack.IntType(32)),
             ('pubkey_hash', pack.IntType(160)),
+            ('pubkey_type', pack.IntType(8)),
             ('subsidy', pack.IntType(64)),
             ('donation', pack.IntType(16)),
             ('stale_info', pack.EnumType(pack.IntType(8), dict((k, {0: None, 253: 'orphan', 254: 'doa'}.get(k, 'unk%i' % (k,))) for k in range(256)))),
@@ -187,7 +188,14 @@ class Share(object):
         assert total_weight == sum(weights.values()) + donation_weight, (total_weight, sum(weights.values()) + donation_weight)
         
         amounts = dict((script, share_data['subsidy']*(49*weight)//(50*total_weight)) for script, weight in weights.items()) # 98% goes according to weights prior to this share
-        this_script = bitcoin_data.pubkey_hash_to_script2(share_data['pubkey_hash'])
+        if share_data['pubkey_type'] == 1:
+            this_script = bitcoin_data.pubkey_hash_to_hybrid_script2(
+                share_data['pubkey_hash']
+            )
+        else:
+            this_script = bitcoin_data.pubkey_hash_to_script2(
+                share_data['pubkey_hash']
+            )
         amounts[this_script] = amounts.get(this_script, 0) + share_data['subsidy']//50 # 2% goes to block finder
         amounts[DONATION_SCRIPT] = amounts.get(DONATION_SCRIPT, 0) + share_data['subsidy'] - sum(amounts.values()) # all that's left over is the donation weight and some extra satoshis due to rounding
         
@@ -272,7 +280,14 @@ class Share(object):
         self.target = self.share_info['bits'].target
         self.timestamp = self.share_info['timestamp']
         self.previous_hash = self.share_data['previous_share_hash']
-        self.new_script = bitcoin_data.pubkey_hash_to_script2(self.share_data['pubkey_hash'])
+        if self.share_data['pubkey_type'] == 1:
+            self.new_script = bitcoin_data.pubkey_hash_to_hybrid_script2(
+                self.share_data['pubkey_hash']
+            )
+        else:
+            self.new_script = bitcoin_data.pubkey_hash_to_script2(
+                self.share_data['pubkey_hash']
+            )
         self.desired_version = self.share_data['desired_version']
         self.absheight = self.share_info['absheight']
         self.abswork = self.share_info['abswork']

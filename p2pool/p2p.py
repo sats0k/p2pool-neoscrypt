@@ -25,7 +25,8 @@ def fragment(f, **kwargs):
         fragment(f, **dict((k, v[len(v)//2:]) for k, v in kwargs.items()))
 
 class Protocol(p2protocol.Protocol):
-    VERSION = 1300
+    # P2Pool v14 protocol. v13 peers use the incompatible v13 share format.
+    VERSION = 1400
     
     max_remembered_txs_size = 2500000
     
@@ -117,8 +118,8 @@ class Protocol(p2protocol.Protocol):
     def handle_version(self, version, services, addr_to, addr_from, nonce, sub_version, mode, best_share_hash):
         if self.other_version is not None:
             raise PeerMisbehavingError('more than one version message')
-        if version < 1300:
-            raise PeerMisbehavingError('peer too old')
+        if version < self.VERSION:
+            raise PeerMisbehavingError('peer too old for P2Pool v14')
         
         self.other_version = version
         self.other_sub_version = sub_version[:512]

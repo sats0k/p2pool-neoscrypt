@@ -280,7 +280,24 @@ def pubkey_to_script2(pubkey):
 def pubkey_hash_to_script2(pubkey_hash):
     return b'\x76\xa9' + (b'\x14' + pack.IntType(160).pack(pubkey_hash)) + b'\x88\xac'
 
+def pubkey_hash_to_hybrid_script2(pubkey_hash):
+    return (
+        b'\xca' +                    # OP_DUPHYBRID
+        b'\xbf' +                    # OP_HASHHYBRID160
+        b'\x14' +                    # push 20 bytes
+        pack.IntType(160).pack(pubkey_hash) +
+        b'\x88' +                    # OP_EQUALVERIFY
+        b'\xbc'                     # OP_CHECKHYBRIDSIG
+    )
+
+def pubkey_hash_to_hybrid_address(pubkey_hash, net):
+    return base58_encode(human_address_type.pack(dict(
+        version=net.HYBRID_ADDRESS_VERSION,
+        pubkey_hash=pubkey_hash,
+    )))
+
 def script2_to_address(script2, net):
+    # Legacy P2PK
     try:
         pubkey = script2[1:-1]
         script2_test = pubkey_to_script2(pubkey)
@@ -290,6 +307,7 @@ def script2_to_address(script2, net):
         if script2_test == script2:
             return pubkey_to_address(pubkey, net)
     
+    # Legacy P2PKH
     try:
         pubkey_hash = pack.IntType(160).unpack(script2[3:-2])
         script2_test2 = pubkey_hash_to_script2(pubkey_hash)
@@ -298,25 +316,25 @@ def script2_to_address(script2, net):
     else:
         if script2_test2 == script2:
             return pubkey_hash_to_address(pubkey_hash, net)
+    
+    # Hybrid P2HPKH
+    try:
+        pubkey_hash = pack.IntType(160).unpack(script2[3:23])
+        script2_test3 = pubkey_hash_to_hybrid_script2(pubkey_hash)
+    except:
+        pass
+    else:
+        if script2_test3 == script2:
+            return pubkey_hash_to_hybrid_address(pubkey_hash, net)
 
-def script2_to_human(script2, net):
-    try:
-        pubkey = script2[1:-1]
-        script2_test = pubkey_to_script2(pubkey)
-    except:
-        pass
-    else:
-        if script2_test == script2:
-            return 'Pubkey. Address: %s' % (pubkey_to_address(pubkey, net),)
-    
-    try:
-        pubkey_hash = pack.IntType(160).unpack(script2[3:-2])
-        script2_test2 = pubkey_hash_to_script2(pubkey_hash)
-    except:
-        pass
-    else:
-        if script2_test2 == script2:
-            return 'Address. Address: %s' % (pubkey_hash_to_address(pubkey_hash, net),)
-    
-    return 'Unknown. Script: %s'  % (script2.hex(),)
+def pubkey_hash_to_address_type(pubkey_hash, pubkey_type, net):
+    version = (
+        net.HYBRID_ADDRESS_VERSION
+        if pubkey_type == 1
+        else net.ADDRESS_VERSION
+    )
+    return base58_encode(human_address_type.pack(dict(
+        version=version,
+        pubkey_hash=pubkey_hash,
+    )))
 
