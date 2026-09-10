@@ -37,12 +37,15 @@ def _atomic_write(filename, data):
         f.flush()
         try:
             os.fsync(f.fileno())
-        except:
+        except OSError:
             pass
     try:
         os.rename(filename + '.new', filename)
-    except: # XXX windows can't overwrite
-        os.remove(filename)
+    except OSError:
+        try:
+            os.remove(filename)
+        except FileNotFoundError:
+            pass
         os.rename(filename + '.new', filename)
 
 def get_web_root(wb, datadir_path, daemon_getinfo_var, stop_event=variable.Event()):

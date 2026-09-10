@@ -485,6 +485,8 @@ class ServerFactory(protocol.ServerFactory):
         return p
     
     def _host_to_ident(self, host):
+        if ':' in host:
+            return tuple(host.split(':')[:4])
         a, b, c, d = host.split('.')
         return a, b
     
@@ -528,6 +530,8 @@ class ClientFactory(protocol.ClientFactory):
         self.running = False
     
     def _host_to_ident(self, host):
+        if ':' in host:
+            return tuple(host.split(':')[:4])
         a, b, c, d = host.split('.')
         return a, b
     

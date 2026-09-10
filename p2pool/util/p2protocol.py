@@ -32,10 +32,14 @@ class Protocol(protocol.Protocol):
             while start != self._message_prefix:
                 start = (start + (yield 1))[-len(self._message_prefix):]
             
-            command = (yield 12).rstrip(b'\0').decode('ascii')
+            command = (yield 12).rstrip(b'\0').decode('ascii', errors='replace')
+            if '\ufffd' in command:
+                self.badPeerHappened()
+                continue
             length, = struct.unpack('<I', (yield 4))
             if length > self._max_payload_length:
-                print('length too large')
+                print('length too large for', self.transport.getPeer().host, length, '>', self._max_payload_length)
+                self.badPeerHappened()
                 continue
             checksum = yield 4
             payload = yield length

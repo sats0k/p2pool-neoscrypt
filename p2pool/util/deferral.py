@@ -61,7 +61,7 @@ class ReplyMatcher(object):
         self.map = {}
 
     def __call__(self, request_id):
-        if id not in self.map:
+        if request_id not in self.map:
             self.func(request_id)
 
         df = defer.Deferred()

@@ -11,7 +11,12 @@ static PyObject *neoscrypt_getpowhash(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "y#", &input, &input_len))
         return NULL;
 
-    /* NeoScrypt hashes an 80-byte block header */
+    if (input_len != 80) {
+        PyErr_Format(PyExc_ValueError,
+            "expected 80-byte block header, got %zd bytes", input_len);
+        return NULL;
+    }
+
     neoscrypt((unsigned char *)input, output);
 
     return PyBytes_FromStringAndSize((const char *)output, 32);

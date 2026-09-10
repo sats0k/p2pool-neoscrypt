@@ -75,8 +75,15 @@ class StratumRPCMiningProvider(object):
             return False
         x, got_response = self.handler_map[job_id]
         
-        coinb_nonce = getwork._swap4(bytes.fromhex(extranonce2))       
-        assert len(coinb_nonce) == self.wb.COINBASE_NONCE_LENGTH
+        try:
+            coinb_nonce = getwork._swap4(bytes.fromhex(extranonce2))
+            if len(coinb_nonce) != self.wb.COINBASE_NONCE_LENGTH:
+                return False
+            timestamp = pack.IntType(32).unpack(getwork._swap4(bytes.fromhex(ntime), True))
+            nonce_value = pack.IntType(32).unpack(getwork._swap4(bytes.fromhex(nonce), True))
+        except ValueError:
+            return False
+
         new_packed_gentx = x['coinb1'] + coinb_nonce + x['coinb2']
         
         #build header
@@ -84,9 +91,9 @@ class StratumRPCMiningProvider(object):
             version=x['version'],
             previous_block=x['previous_block'],
             merkle_root=bitcoin_data.check_merkle_link(bitcoin_data.hash256(new_packed_gentx), x['merkle_link']),
-            timestamp=pack.IntType(32).unpack(getwork._swap4(bytes.fromhex(ntime),True)),
+            timestamp=timestamp,
             bits=x['bits'],
-            nonce=pack.IntType(32).unpack(getwork._swap4(bytes.fromhex(nonce),True)),
+            nonce=nonce_value,
 
         )
 	
