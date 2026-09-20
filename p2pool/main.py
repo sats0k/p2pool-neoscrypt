@@ -98,15 +98,19 @@ def main(args, net, datadir_path, merged_urls, worker_endpoint):
             
             if address is None:
                 print('    Getting payout address from daemon...')
-                address = yield deferral.retry('Error getting payout address from daemon:', 5)(lambda: daemon.rpc_getaccountaddress('p2pool'))()
+                if args.payout_hybrid:
+                    address = yield deferral.retry('Error getting payout address from daemon:', 5)(lambda: daemon.rpc_gethybridaddress('p2pool'))()
+                else:
+                    address = yield deferral.retry('Error getting payout address from daemon:', 5)(lambda: daemon.rpc_getaccountaddress('p2pool'))()
             
             with open(address_path, 'w') as f:
                 f.write(address)
             
-            my_pubkey_hash = bitcoin_data.address_to_pubkey_hash(address, net.PARENT)
+            my_pubkey_hash, my_pubkey_type = bitcoin_data.address_to_pubkey_hash_type(address, net.PARENT)
         else:
             my_pubkey_hash = args.pubkey_hash
-        print('    ...success! Payout address:', bitcoin_data.pubkey_hash_to_address(my_pubkey_hash, net.PARENT))
+            my_pubkey_type = args.pubkey_type
+        print('    ...success! Payout address:', bitcoin_data.pubkey_hash_to_address_type(my_pubkey_hash, my_pubkey_type, net.PARENT))
         print()
         
         print("Loading shares...")
@@ -225,7 +229,7 @@ def main(args, net, datadir_path, merged_urls, worker_endpoint):
         else:
             share_rate_type = 'miner'
             share_rate = args.miner_share_rate
-        wb = work.WorkerBridge(node, my_pubkey_hash, args.donation_percentage, merged_urls, args.worker_fee, share_rate, share_rate_type)
+        wb = work.WorkerBridge(node, my_pubkey_hash, my_pubkey_type, args.donation_percentage, merged_urls, args.worker_fee, share_rate, share_rate_type)
         
         web_root = web.get_web_root(wb, datadir_path, daemon_getinfo_var)
         caching_wb = worker_interface.CachingWorkerBridge(wb)
@@ -341,7 +345,8 @@ def main(args, net, datadir_path, merged_urls, worker_endpoint):
                             shares, stale_orphan_shares, stale_doa_shares,
                             math.format_binomial_conf(stale_orphan_shares + stale_doa_shares, shares, 0.95),
                             math.format_binomial_conf(stale_orphan_shares + stale_doa_shares, shares, 0.95, lambda x: (1 - x)/(1 - stale_prop)),
-                            node.get_current_txouts().get(bitcoin_data.pubkey_hash_to_script2(my_pubkey_hash), 0)*1e-8, net.PARENT.SYMBOL,
+                            node.get_current_txouts().get(
+                                (bitcoin_data.pubkey_hash_to_hybrid_script2(my_pubkey_hash) if my_pubkey_type == 1 else bitcoin_data.pubkey_hash_to_script2(my_pubkey_hash)), 0)*1e-8, net.PARENT.SYMBOL,
                         )
                         this_str += '\n Pool: %sH/s Stale rate: %.1f%% Expected time to block: %s' % (
                             math.format(int(real_att_s)),
@@ -390,6 +395,9 @@ def run():
     parser.add_argument('-a', '--address',
         help='generate payouts to this address (default: <address returned by the daemon>)',
         type=str, action='store', default=None, dest='address')
+    parser.add_argument('--payout-hybrid',
+        help='store the generated/daemon payout address as a hybrid (P2HPKH/Q-) address (default: legacy P-address)',
+        action='store_true', default=False, dest='payout_hybrid')
     parser.add_argument('--datadir',
         help='store data in this directory (default: <directory run_p2pool.py is in>/data)',
         type=str, action='store', default=None, dest='datadir')
@@ -546,11 +554,12 @@ def run():
     
     if args.address is not None:
         try:
-            args.pubkey_hash = bitcoin_data.address_to_pubkey_hash(args.address, net.PARENT)
+            args.pubkey_hash, args.pubkey_type = bitcoin_data.address_to_pubkey_hash_type(args.address, net.PARENT)
         except Exception as e:
             parser.error('error parsing address: ' + repr(e))
     else:
         args.pubkey_hash = None
+        args.pubkey_type = 0
     
     def separate_url(url):
         s = urllib.parse.urlsplit(url)

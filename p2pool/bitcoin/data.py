@@ -265,11 +265,18 @@ def pubkey_hash_to_address(pubkey_hash, net):
 def pubkey_to_address(pubkey, net):
     return pubkey_hash_to_address(hash160(pubkey), net)
 
-def address_to_pubkey_hash(address, net):
+def address_to_pubkey_hash_type(address, net):
     x = human_address_type.unpack(base58_decode(address))
-    if x['version'] != net.ADDRESS_VERSION:
+    if x['version'] == net.ADDRESS_VERSION:
+        pubkey_type = 0
+    elif x['version'] == getattr(net, 'HYBRID_ADDRESS_VERSION', -1):
+        pubkey_type = 1
+    else:
         raise ValueError('address not for this net!')
-    return x['pubkey_hash']
+    return x['pubkey_hash'], pubkey_type
+
+def address_to_pubkey_hash(address, net):
+    return address_to_pubkey_hash_type(address, net)[0]
 
 # transactions
 

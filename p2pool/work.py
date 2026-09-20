@@ -18,12 +18,13 @@ import p2pool, p2pool.data as p2pool_data
 class WorkerBridge(worker_interface.WorkerBridge):
     COINBASE_NONCE_LENGTH = 8
     
-    def __init__(self, node, my_pubkey_hash, donation_percentage, merged_urls, worker_fee, share_rate, share_rate_type):
+    def __init__(self, node, my_pubkey_hash, my_pubkey_type, donation_percentage, merged_urls, worker_fee, share_rate, share_rate_type):
         worker_interface.WorkerBridge.__init__(self)
         self.recent_shares_ts_work = []
         
         self.node = node
         self.my_pubkey_hash = my_pubkey_hash
+        self.my_pubkey_type = my_pubkey_type
         self.donation_percentage = donation_percentage
         self.worker_fee = worker_fee
         self.share_rate = share_rate
@@ -166,7 +167,7 @@ class WorkerBridge(worker_interface.WorkerBridge):
         
         if random.uniform(0, 100) < self.worker_fee:
             pubkey_hash = self.my_pubkey_hash
-            pubkey_type = 0
+            pubkey_type = self.my_pubkey_type
         else:
             try:
                 address_data = bitcoin_data.human_address_type.unpack(
@@ -184,7 +185,7 @@ class WorkerBridge(worker_interface.WorkerBridge):
 
             except:
                 pubkey_hash = self.my_pubkey_hash
-                pubkey_type = 0
+                pubkey_type = self.my_pubkey_type
         
         return user, pubkey_hash, pubkey_type, desired_share_target, desired_pseudoshare_target
     

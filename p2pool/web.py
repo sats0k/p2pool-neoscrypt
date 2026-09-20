@@ -240,7 +240,7 @@ def get_web_root(wb, datadir_path, daemon_getinfo_var, stop_event=variable.Event
 
     web_root.putChild(b'pings', WebInterface(get_pings))
     web_root.putChild(b'peer_versions', WebInterface(lambda: dict(('%s:%i' % peer.addr, peer.other_sub_version) for peer in node.p2p_node.peers.values())))
-    web_root.putChild(b'payout_addr', WebInterface(lambda: bitcoin_data.pubkey_hash_to_address(wb.my_pubkey_hash, node.net.PARENT)))
+    web_root.putChild(b'payout_addr', WebInterface(lambda: bitcoin_data.pubkey_hash_to_address_type(wb.my_pubkey_hash, getattr(wb, 'my_pubkey_type', 0), node.net.PARENT)))
     web_root.putChild(b'recent_blocks', WebInterface(lambda: [dict(
         ts=s.header['timestamp'],
         hash='%064x' % s.header_hash,
